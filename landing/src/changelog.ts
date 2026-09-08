@@ -45,6 +45,33 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    // TWO FIXES, AND THE MINOR NUMBER MOVED ANYWAY (the author's call): the
+    // patch place would have gone to two digits, which they have declined
+    // before (v1.0.11 became v1.1.0 for the same reason).
+    //
+    // The picture line leads because it is the one anyone can see - the author
+    // put it as 조금 크게 느껴졌다 after comparing the same file against an
+    // image editor. It says WHAT WAS WRONG (half a pixel off) because a reader
+    // who noticed their screenshots looking soft has no other way to recognise
+    // their own case.
+    //
+    // The crash line stays as a crash line, the author's call. The standing
+    // rule keeps a frightening symptom off a card that sits above a download
+    // button, but this one carries its own condition - another program holding
+    // the clipboard - so the reader who never hit it can see that it is not
+    // waiting for them, and the one who did hit it needs no translation. It
+    // came in as issue #3 with the diagnosis and the fix already in it.
+    version: 'v2.6.0',
+    ko: [
+      '1:1 배율에서 이미지가 화면 픽셀에 정확히 맞춰 표시됩니다. 이전에는 반 픽셀 어긋난 자리에 그려져 선명도가 떨어질 수 있었습니다.',
+      '경로 복사 시 다른 프로그램이 클립보드를 사용 중이면 앱이 종료되던 문제를 수정했습니다.',
+    ],
+    en: [
+      'A picture at 1:1 now lands on whole screen pixels. It could sit half a pixel off before, which softened every edge.',
+      'Fixed the app closing when a path was copied while another program held the clipboard.',
+    ],
+  },
+  {
     // FOUR LINES: one thing to see, three things that were wrong. The panel
     // line LEADS because it is the only change of the round anyone can look at
     // - the other three are recognised by people who met them.

@@ -1,4 +1,4 @@
-# Edgetree v2.5.9
+# Edgetree v2.6.0
 
 [English](README.md)
 
@@ -244,6 +244,11 @@ dotnet publish src/Edgetree -c Release -r win-x64 --self-contained true -o publi
 csproj만 올리면 됩니다.
 
 ## 변경 이력
+
+### v2.6.0 (2026-09-08)
+
+- 1:1 배율에서 이미지가 화면 픽셀에 정확히 맞춰 표시됩니다. 이전에는 반 픽셀 어긋난 자리에 그려져 선명도가 떨어질 수 있었습니다.
+- 경로 복사 시 다른 프로그램이 클립보드를 사용 중이면 앱이 종료되던 문제를 수정했습니다.
 
 ### v2.5.9 (2026-09-05)
 

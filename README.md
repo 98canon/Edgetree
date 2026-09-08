@@ -1,4 +1,4 @@
-# Edgetree v2.5.9
+# Edgetree v2.6.0
 
 [한국어 안내](README-ko.md)
 
@@ -216,6 +216,11 @@ lands in `releases/v<version>/` beside the other two. The script reads its
 version out of the exe it packages, so bumping the csproj is enough.
 
 ## Changelog
+
+### v2.6.0 (2026-09-08)
+
+- A picture at 1:1 now lands on whole screen pixels. It could sit half a pixel off before, which softened every edge.
+- Fixed the app closing when a path was copied while another program held the clipboard.
 
 ### v2.5.9 (2026-09-05)
 
