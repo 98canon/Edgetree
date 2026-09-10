@@ -1,4 +1,13 @@
-# Edgetree v2.6.0
+# Edgetree v2.7.0
+
+> **Unofficial Simplified Chinese community fork** maintained by [98canon](https://github.com/98canon).
+> Based on the upstream [Edgetree v2.6.0](https://github.com/legendsteel11/Edgetree).
+>
+> This fork adds Simplified Chinese UI/help, document preview and editing,
+> customizable shortcuts, work-area reservation, and related multi-instance,
+> multi-monitor, file-filter, and auto-docking improvements. The original
+> author/project remains credited in [CONTRIBUTORS.md](CONTRIBUTORS.md); this fork
+> retains the original MIT and third-party license notices.
 
 [한국어 안내](README-ko.md)
 
@@ -11,7 +20,7 @@ straight to a file without opening a full Explorer window.
 
 ## Download
 
-Grab the latest build from the [Releases page](https://github.com/legendsteel11/Edgetree/releases/latest). Three options are attached to each release:
+Grab the latest build from the [Releases page](https://github.com/98canon/Edgetree/releases/latest). Three options are attached to each release:
 
 - **`Edgetree-<version>-win-x64-setup.exe`** (~49 MB) — the installer. Click
   through it and Edgetree lands in your Start menu, with a clean uninstall.
@@ -216,6 +225,12 @@ lands in `releases/v<version>/` beside the other two. The script reads its
 version out of the exe it packages, so bumping the csproj is enough.
 
 ## Changelog
+
+### v2.7.0 (2026-09-10)
+
+- Simplified Chinese UI and help content are included alongside Korean and English.
+- Added Markdown and source-code preview/editing with tabs and pop-out viewing.
+- Added configurable keyboard shortcuts, Windows work-area reservation, and related multi-monitor and auto-docking improvements.
 
 ### v2.6.0 (2026-09-08)
 
@@ -676,7 +691,7 @@ version out of the exe it packages, so bumping the csproj is enough.
 - **Icon style option**: the same icons Windows Explorer shows
 
 Earlier versions are covered on the
-[GitHub releases page](https://github.com/legendsteel11/Edgetree/releases).
+[GitHub releases page](https://github.com/98canon/Edgetree/releases).
 
 ## Requests & bug reports
 
@@ -700,6 +715,13 @@ Icon Theme project (MIT) and the interface glyphs from Google's Material Symbols
 (Apache License 2.0) — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and
 the Apache License text the app itself carries at
 [src/Edgetree/Resources/APACHE-2.0.txt](src/Edgetree/Resources/APACHE-2.0.txt).
+
+## Attribution
+
+- **Original project and upstream code:** [legendsteel11/Edgetree](https://github.com/legendsteel11/Edgetree), copyright (c) 2026 pjh85336@gmail.com.
+- **This fork:** [98canon](https://github.com/98canon) — Simplified Chinese localization, document preview/editing, configurable shortcuts, work-area reservation, and related improvements.
+- This is an unofficial community fork and is not affiliated with or endorsed by the upstream author.
+- Original code and this fork's contributions are distributed under the MIT License. See [LICENSE.md](LICENSE.md) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## About Development
 

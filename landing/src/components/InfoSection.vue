@@ -20,13 +20,13 @@ import { t } from '../i18n'
         <p class="notices">{{ t.info.iconNotice }}</p>
         <a
           class="link"
-          href="https://github.com/legendsteel11/Edgetree/blob/main/LICENSE.md"
+          href="https://github.com/98canon/Edgetree/blob/main/LICENSE.md"
           target="_blank"
           rel="noopener"
         >{{ t.info.licenseLink }} →</a>
         <a
           class="link"
-          href="https://github.com/legendsteel11/Edgetree/blob/main/THIRD-PARTY-NOTICES.md"
+          href="https://github.com/98canon/Edgetree/blob/main/THIRD-PARTY-NOTICES.md"
           target="_blank"
           rel="noopener"
         >{{ t.info.noticesLink }} →</a>

@@ -261,4 +261,22 @@ public static class FileTypeFilter
             && !ExecutableExtensions.Contains(extension),
         _ => false,
     };
+
+    public static bool IsMarkdown(string path)
+    {
+        string extension = Path.GetExtension(path).TrimStart('.');
+        return extension.Equals("md", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("mdown", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("mkd", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsCode(string path)
+    {
+        string extension = Path.GetExtension(path).TrimStart('.');
+        return CodeExtensions.Contains(extension);
+    }
+
+    public static bool IsTextPreview(string path)
+        => IsMarkdown(path) || IsCode(path);
 }

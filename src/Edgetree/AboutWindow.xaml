@@ -196,13 +196,23 @@
 
                 <TextBlock Text="{x:Static services:Strings.AboutGithubLabel}"
                         Style="{StaticResource AboutRowLabelStyle}"/>
-                <TextBlock Text="github.com/legendsteel11/Edgetree"
+                <TextBlock Text="github.com/98canon/Edgetree"
                         Foreground="{DynamicResource AccentForeground}"
                         FontSize="{DynamicResource DialogFontSize}"
                         Cursor="Hand"
                         TextDecorations="Underline"
                         Margin="0,0,0,10"
                         MouseLeftButtonDown="GithubLink_MouseLeftButtonDown"/>
+
+                <TextBlock Text="{x:Static services:Strings.AboutUpstreamLabel}"
+                        Style="{StaticResource AboutRowLabelStyle}"/>
+                <TextBlock Text="github.com/legendsteel11/Edgetree"
+                        Foreground="{DynamicResource AccentForeground}"
+                        FontSize="{DynamicResource DialogFontSize}"
+                        Cursor="Hand"
+                        TextDecorations="Underline"
+                        Margin="0,0,0,10"
+                        MouseLeftButtonDown="UpstreamLink_MouseLeftButtonDown"/>
 
                 <TextBlock Text="{x:Static services:Strings.AboutWebsiteLabel}"
                         Style="{StaticResource AboutRowLabelStyle}"/>

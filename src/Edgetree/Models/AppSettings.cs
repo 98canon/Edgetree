@@ -407,6 +407,14 @@ public class AppSettings
 
     public bool AutoCollapseFolders { get; set; } = false;
     public bool AlwaysOnTop { get; set; } = false;
+
+    // While docked and pinned, register as a Windows appbar so maximized
+    // windows sit beside this one instead of covering it. Off by default:
+    // the existing overlay / auto-hide behaviour stays unless asked for.
+    public bool ReserveWorkAreaWhenDocked { get; set; } = false;
+
+    // User-chosen chords. Missing key = built-in default; empty string = unbound.
+    public Dictionary<string, string> Shortcuts { get; set; } = new();
     // 슬라이드 쇼 - how long each picture is held, in seconds. The RUNNING
     // state deliberately does not live here: an app that started moving
     // pictures by itself on launch would be answering a question nobody asked

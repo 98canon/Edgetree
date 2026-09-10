@@ -34,9 +34,21 @@ internal static class NativeMethods
     private const uint SEE_MASK_INVOKEIDLIST = 0x0000000C;
     private const int SW_SHOWNORMAL = 1;
 
+    private const uint ABM_NEW = 0x00000000;
+    private const uint ABM_REMOVE = 0x00000001;
+    private const uint ABM_QUERYPOS = 0x00000002;
+    private const uint ABM_SETPOS = 0x00000003;
     private const uint ABM_GETSTATE = 0x00000004;
     private const uint ABM_GETTASKBARPOS = 0x00000005;
+    private const uint ABM_ACTIVATE = 0x00000006;
+    private const uint ABM_WINDOWPOSCHANGED = 0x00000009;
     private const int ABS_AUTOHIDE = 0x0000001;
+
+    internal const uint ABE_LEFT = 0;
+    internal const uint ABE_RIGHT = 2;
+
+    internal const int ABN_POSCHANGED = 1;
+    internal const int ABN_FULLSCREENAPP = 2;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -52,11 +64,104 @@ internal static class NativeMethods
         public uint uCallbackMessage;
         public uint uEdge;
         public RECT rc;
-        public int lParam;
+        public IntPtr lParam;
     }
 
     [DllImport("shell32.dll")]
     private static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+
+    private static APPBARDATA AppBarData(IntPtr hwnd)
+    {
+        var data = new APPBARDATA { hWnd = hwnd };
+        data.cbSize = Marshal.SizeOf(data);
+        return data;
+    }
+
+    internal static bool AppBarNew(IntPtr hwnd, uint callbackMessage)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var data = AppBarData(hwnd);
+        data.uCallbackMessage = callbackMessage;
+        return SHAppBarMessage(ABM_NEW, ref data) != IntPtr.Zero;
+    }
+
+    internal static void AppBarRemove(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var data = AppBarData(hwnd);
+        SHAppBarMessage(ABM_REMOVE, ref data);
+    }
+
+    // Propose a strip on the given edge, let Windows subtract the taskbar and
+    // any other appbars, then commit. Thickness is restored after QUERYPOS
+    // because the system subtracts rectangles without keeping the original
+    // width. The SETPOS result is the rectangle the window must actually occupy.
+    internal static (int Left, int Top, int Right, int Bottom) AppBarSetPos(
+        IntPtr hwnd, uint edge, int left, int top, int right, int bottom)
+    {
+        var data = AppBarData(hwnd);
+        data.uEdge = edge;
+        data.rc = new RECT { Left = left, Top = top, Right = right, Bottom = bottom };
+
+        int width = Math.Max(1, right - left);
+        int height = Math.Max(1, bottom - top);
+
+        // Win8+ sometimes answers the first QUERYPOS with a stale rect.
+        for (int i = 0; i < 2; i++)
+        {
+            SHAppBarMessage(ABM_QUERYPOS, ref data);
+            RestoreAppBarThickness(ref data, edge, width, height);
+        }
+
+        SHAppBarMessage(ABM_SETPOS, ref data);
+        return (data.rc.Left, data.rc.Top, data.rc.Right, data.rc.Bottom);
+    }
+
+    private static void RestoreAppBarThickness(ref APPBARDATA data, uint edge, int width, int height)
+    {
+        switch (edge)
+        {
+            case ABE_LEFT:
+                data.rc.Right = data.rc.Left + width;
+                break;
+            case ABE_RIGHT:
+                data.rc.Left = data.rc.Right - width;
+                break;
+            default:
+                data.rc.Bottom = data.rc.Top + height;
+                break;
+        }
+    }
+
+    internal static void AppBarActivate(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var data = AppBarData(hwnd);
+        SHAppBarMessage(ABM_ACTIVATE, ref data);
+    }
+
+    internal static void AppBarWindowPosChanged(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var data = AppBarData(hwnd);
+        SHAppBarMessage(ABM_WINDOWPOSCHANGED, ref data);
+    }
 
     // Which screen edge an AUTO-HIDDEN taskbar sits on, in that monitor's own
     // physical pixels - null when the taskbar is always visible.
@@ -333,7 +438,7 @@ internal static class NativeMethods
     }
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint RegisterWindowMessage(string lpString);
+    internal static extern uint RegisterWindowMessage(string lpString);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);

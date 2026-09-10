@@ -133,18 +133,10 @@ public partial class App : Application
         }
     }
 
-    // The landing rather than the GitHub release: it carries the "업데이트 내역"
-    // card, which is what someone clicking "there is a new version" actually
-    // wants to read, and its download buttons already resolve to the latest
-    // release anyway. It is also ours, so the visit is measurable - hence the
-    // utm_source, without which this cannot be told apart from any other
-    // referrer.
-    // The SOURCE is a parameter as of 2026-08-17, when the options menu became a
-    // second way in. The utm exists to make these visits measurable, and one
-    // label for two routes would answer "did anyone click it" while hiding which
-    // row they clicked - the tray's, which is on screen even when the app is not,
-    // or the menu's, which is where someone already using the app would find it.
-    private static void OpenReleasesPage(string source)
+    // Both the tray and options-menu update actions lead to this fork's latest
+    // release. Keeping the URL here, rather than in two handlers, prevents one
+    // route from accidentally sending users back to the upstream download.
+    private static void OpenReleasesPage()
     {
         try
         {
@@ -154,7 +146,7 @@ public partial class App : Application
                 // part of the fragment and it never reaches analytics.
                 // #download is DownloadSection.vue's own id, and it lands on
                 // the update-history card that sits just above the buttons.
-                FileName = $"https://edgetree.vercel.app/?utm_source={source}#download",
+                FileName = "https://github.com/98canon/Edgetree/releases/latest",
                 UseShellExecute = true
             });
         }
@@ -323,9 +315,9 @@ public partial class App : Application
     // Reached from the tray menu, which now lives in MainWindow's resources -
     // the actions stay here because they are the application's, not the
     // window's, and two of them run with no window on screen at all.
-    internal void OpenReleasesPageFromTray() => OpenReleasesPage("app-tray");
+    internal void OpenReleasesPageFromTray() => OpenReleasesPage();
 
-    internal void OpenReleasesPageFromMenu() => OpenReleasesPage("app-menu");
+    internal void OpenReleasesPageFromMenu() => OpenReleasesPage();
 
     internal void ToggleMainWindowFromTray() => ToggleMainWindowTray();
 

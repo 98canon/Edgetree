@@ -30,6 +30,44 @@ Apache License 2.0으로 배포됩니다. **§4a가 요구하는 라이선스 �
 열 수 있습니다(단일 exe라 옆에 텍스트 파일을 둘 자리가 없어 이렇게 했습니다). 저장소에서는
 [src/Edgetree/Resources/APACHE-2.0.txt](src/Edgetree/Resources/APACHE-2.0.txt)에 있습니다.
 
+## MdXaml
+
+Markdown 미리보기(WPF FlowDocument)는 [MdXaml](https://github.com/whistyun/MdXaml)
+(MIT License)을 사용합니다.
+
+```
+The MIT License (MIT)
+Copyright (c) 2020 Bevan Arps, Whistyun
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## MdXaml.Plugins
+
+MdXaml uses the transitive [MdXaml.Plugins](https://github.com/whistyun/MdXaml)
+package (MIT License, copyright (c) 2022 whistyun). It is covered by the MIT
+license text above.
+
+## AvalonEdit
+
+코드 편집과 구문 강조는 [AvalonEdit](https://github.com/icsharpcode/AvalonEdit)
+(MIT License, copyright (c) AvalonEdit Contributors)를 사용합니다.
+
+```
+The MIT License (MIT)
+Copyright (c) AvalonEdit contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
 ## .NET 8 (Microsoft)
 
 독립 실행형(standalone) 빌드에는 .NET 8 런타임이 함께 들어갑니다. .NET은 MIT 라이선스로

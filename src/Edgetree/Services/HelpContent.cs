@@ -53,6 +53,7 @@ public static class HelpContent
     public static IReadOnlyList<string> Tips() => new[]
     {
         T("고정/자동 숨김 선택 및 크기(높이) 조정", "Pin it or let it auto-hide, and set the size", "固定它，或让它自动隐藏，并设置大小"),
+        T("다른 창을 최대화해도 가리지 않게 하기 (기본 설정)", "Keep maximized windows beside this one (General)", "让其它窗口最大化时排在旁边（常规设置）"),
         T("안 쓰는 폴더 감추기", "Exclude the folders you never open", "隐藏从不打开的文件夹"),
         // Which of the two wins is the part nobody guesses, and it is the part
         // that makes the pair usable at all.
@@ -126,6 +127,9 @@ public static class HelpContent
                       "Right-click the title bar", "Help · Minimize to tray · Restart · Quit", "右键标题栏", "帮助 · 最小化到托盘 · 重启 · 退出"),
                     R("가장자리 드래그", "너비 조절",
                       "Drag the outer edge", "Resize", "拖动外侧边缘", "调整宽度"),
+                    R("기본 설정 · 최대화 시 자리 비우기", "다른 창이 최대화되어도 옆을 씀",
+                      "General · Make room when others maximize", "Maximized windows sit beside this one",
+                      "常规设置 · 最大化时让出位置", "其它窗口最大化时排在旁边，不再盖住"),
                     R("가장자리 더블클릭", "내용에 맞춰 너비 맞춤",
                       "Double-click the outer edge", "Fit the width to the contents", "双击外侧边缘", "使宽度适合内容"),
                     R("위 · 아래 가장자리 드래그", "높이와 위치 (짧은 밴드)",
@@ -430,6 +434,15 @@ public static class HelpContent
                 {
                     R("제목 표시줄 이미지 아이콘", "멀티미디어 패널 열기 · 닫기",
                       "The picture icon in the title bar", "Open · close the multimedia panel", "标题栏中的图片图标", "打开 · 关闭多媒体面板"),
+                    R(".md 파일", "미리보기로 열림 · 위에서 편집으로 전환 · 고치면 바로 저장",
+                      "A .md file", "Opens as preview · switch to Edit at the top · saves as you type",
+                      ".md 文件", "默认预览；顶部可切到编辑；改完会自动保存"),
+                    R("코드 파일", "색깔 있는 편집기 · 고치면 바로 저장",
+                      "A code file", "Opens in a colored editor · saves as you type",
+                      "代码文件", "带颜色的编辑器；改完会自动保存"),
+                    R("미리보기에서 「새 창에서 보기」 · 휠클릭", "독립 창 · 탭으로 여러 파일(사진 포함) 유지",
+                      "Open in new window · wheel-click", "A separate window with tabs, including pictures",
+                      "预览里点「弹出查看」或中键", "独立窗口；可用标签留住多篇，也可以打开图片"),
                     R("옵션 → 멀티미디어 패널 → 더블클릭으로 열기",
                       "트리에서 더블클릭한 파일을 기본 프로그램 대신 패널에서 엶",
                       "Options → Multimedia panel → Open on double-click",
@@ -438,9 +451,10 @@ public static class HelpContent
                     // wording: what it does for a folder is nothing, which
                     // reads as the option being broken unless it is said.
                     R("옵션 → 멀티미디어 패널 → 자동 펼치기",
-                      "미디어 파일을 선택할 경우에만 패널이 펼쳐짐 (폴더는 동작하지 않음)",
+                      "사진·영상·Markdown·코드를 고르면 패널이 펼쳐짐 (폴더는 동작하지 않음)",
                       "Options → Multimedia panel → Expand on selection",
-                      "Expands the panel when a media file is selected - folders do nothing", "选项 → 多媒体面板 → 选择时展开", "只有选中媒体文件时才展开面板；文件夹不会触发此操作"),
+                      "Expands the panel when a picture, film, Markdown or code file is selected - folders do nothing",
+                      "选项 → 多媒体面板 → 选择时展开", "选中图片、视频、Markdown 或代码时展开；文件夹不会触发"),
                     // The cover takes the header away, so this says where its
                     // menu went. Its companion - the line that names the file
                     // at the foot on a mouse move - had a row here too and it

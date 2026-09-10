@@ -19,6 +19,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SidebarExplorer.App"
         xmlns:models="clr-namespace:SidebarExplorer.App.Models"
+        xmlns:controls="clr-namespace:SidebarExplorer.App.Controls"
         xmlns:services="clr-namespace:SidebarExplorer.App.Services"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:system="clr-namespace:System;assembly=mscorlib"
@@ -1870,6 +1871,13 @@
                         IsCheckable="True"
                         AutomationProperties.AutomationId="dockOnRight"
                         Click="DockOnRightMenuItem_Click"/>
+                <MenuItem Header="{x:Static services:Strings.MenuReserveWorkArea}"
+                        IsCheckable="True"
+                        AutomationProperties.AutomationId="reserveWorkArea"
+                        Click="ReserveWorkAreaMenuItem_Click"/>
+                <MenuItem Header="{x:Static services:Strings.MenuShortcuts}"
+                        AutomationProperties.AutomationId="shortcuts"
+                        Click="ShortcutsMenuItem_Click"/>
                 <MenuItem Header="{x:Static services:Strings.MenuAutoDock}"
                         IsCheckable="True"
                         AutomationProperties.AutomationId="autoDock"
@@ -9119,6 +9127,12 @@
                                 DragCompleted="ViewerFilmstripThumb_DragCompleted"/>
                       </Grid>
                     </Border>
+                    <controls:DocumentPane x:Name="DocumentPane"
+                            Grid.Row="0"
+                            Grid.RowSpan="3"
+                            Panel.ZIndex="4"
+                            Visibility="Collapsed"
+                            PopOutRequested="DocumentPane_PopOutRequested"/>
                     <StackPanel x:Name="ViewerCaptionPanel"
                             Grid.Row="1"
                             Margin="{DynamicResource ViewerCaptionPanelMargin}">

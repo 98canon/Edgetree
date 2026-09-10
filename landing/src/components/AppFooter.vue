@@ -16,7 +16,7 @@ const EMAIL = 'pjh85336@gmail.com'
         <div class="brand">
           <img src="/icon.png" alt="" width="20" height="20" />
           <span>Edgetree</span>
-          <a class="repo" href="https://github.com/legendsteel11/Edgetree" target="_blank" rel="noopener">{{ t.nav.github }}</a>
+          <a class="repo" href="https://github.com/98canon/Edgetree" target="_blank" rel="noopener">{{ t.nav.github }}</a>
         </div>
         <!-- TWO ROUTES, and the second one is why this changed (2026-08-19).
              The only way in used to be mail, and a report that arrives as mail
@@ -34,7 +34,7 @@ const EMAIL = 'pjh85336@gmail.com'
           {{ t.footer.contact }}:
           <a :href="`mailto:${EMAIL}`">{{ EMAIL }}</a>
           ·
-          <a href="https://github.com/legendsteel11/Edgetree/issues" target="_blank" rel="noopener">GitHub Issues</a>
+          <a href="https://github.com/98canon/Edgetree/issues" target="_blank" rel="noopener">GitHub Issues</a>
         </span>
       </div>
 

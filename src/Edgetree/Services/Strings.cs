@@ -285,6 +285,24 @@ public static class Strings
     // Inside the 멀티미디어 패널 submenu, so the subject is already named.
     public static string MenuViewerSideSwapped = "좌우 위치 반전";
     public static string MenuDockOnRight = "고정 위치 오른쪽";
+    public static string MenuReserveWorkArea = "최대화 시 자리 비우기";
+    public static string MenuShortcuts = "바로 가기 키";
+    public static string ShortcutSettingsTitle = "바로 가기 키";
+    public static string ShortcutUnbound = "없음";
+    public static string ShortcutPress = "새 키를 누르세요…";
+    public static string ShortcutClear = "지우기";
+    public static string ShortcutReset = "기본값";
+    public static string ShortcutHint = "행을 클릭한 뒤 원하는 키를 누르세요. Explorer와 같은 F2·Delete·Ctrl+C 는 그대로 둡니다.";
+    public static string ShortcutSearch = "검색";
+    public static string ShortcutHelp = "도움말";
+    public static string ShortcutClosePanel = "미리보기 패널 닫기";
+    public static string ShortcutCollapseAll = "폴더 전체 접기";
+    public static string ShortcutNextItem = "다음 파일";
+    public static string ShortcutHistoryBack = "이전 폴더";
+    public static string ShortcutHistoryForward = "다음 폴더";
+    public static string ShortcutSlideshow = "슬라이드 쇼";
+    public static string ShortcutClock = "시계";
+    public static string ShortcutSavePreset = "현재 프리셋 저장";
     public static string MenuAutoDock = "가장자리에 자동 고정";
     public static string MenuAutoHideCloseOnLeave = "마우스 이탈 시 닫기";
     public static string MenuAutoHideUseHandle = "숨김 시 손잡이만";
@@ -536,6 +554,14 @@ public static class Strings
     // 상태다 - 앞의 체크 표시가 켜졌는지를 이미 말하고 있고, 둘레의 줄들(자막,
     // 썸네일 바, 바탕화면 채우기)도 동작이 아니라 이름이다.
     public static string ViewerFullscreen = "전체화면";
+    public static string DocumentPreview = "미리보기";
+    public static string DocumentEdit = "편집";
+    public static string DocumentPopOut = "새 창에서 보기";
+    public static string DocumentTooLarge = "파일이 너무 커서 여기서 열 수 없습니다. 기본 프로그램에서 여세요.";
+    public static string DocumentLoadFailed = "파일을 열 수 없습니다.";
+    public static string DocumentSaveFailed = "저장하지 못했습니다.";
+    public static string DocumentPickFile = "트리에서 파일을 선택하세요";
+    public static string DocumentNewTab = "새 탭";
     // 이 줄만 두 언어에 같다 (2026-08-19). 여기는 키 이름이 서는 칸이고, 그 칸의
     // 다른 값은 Space · Home · Insert · F1처럼 키에 적힌 글자 그대로다. 휠클릭
     // 하나만 한글이면 같은 칸에서 혼자 다른 종류의 말이 된다. F1의 같은 칸도 이
@@ -871,6 +897,7 @@ public static class Strings
     public static string AboutDateLabel = "날짜";
     public static string AboutLicenseLabel = "라이선스 요약";
     public static string AboutGithubLabel = "GitHub";
+    public static string AboutUpstreamLabel = "상위 프로젝트";
     public static string AboutWebsiteLabel = "웹사이트";
     public static string AboutOtherToolLabel = "같은 개발자의 다른 도구";
     public static string AboutUpdateAvailableFormat = "새 버전 {0} 다운로드";
@@ -894,9 +921,8 @@ public static class Strings
     // Renamed off Tray* when the third place arrived.
     public static string UpdateAvailableRow = "새 업데이트 - v{0}";
     // Where that row goes, shown in the gesture column beside it. Not
-    // translated - it is a hostname, and it is the same one both languages
-    // download from.
-    public static string UpdateSiteHost = "edgetree.vercel.app";
+    // translated - it is the fork release address both languages download from.
+    public static string UpdateSiteHost = "github.com/98canon/Edgetree";
 
     // MessageBox titles/bodies
     public static string PasteFailedTitle = "붙여넣기 실패";
@@ -1103,6 +1129,24 @@ public static class Strings
         ButtonEdgeShadesTip = "为列表顶部和底部添加阴影";
         MenuViewerSideSwapped = "交换两侧";
         MenuDockOnRight = "固定到右侧边缘";
+        MenuReserveWorkArea = "最大化时让出位置";
+        MenuShortcuts = "快捷键";
+        ShortcutSettingsTitle = "快捷键";
+        ShortcutUnbound = "无";
+        ShortcutPress = "请按下新快捷键…";
+        ShortcutClear = "清除";
+        ShortcutReset = "恢复默认";
+        ShortcutHint = "点一行，再按下你想用的键。资源管理器那套 F2、Delete、Ctrl+C 保持不变。";
+        ShortcutSearch = "搜索";
+        ShortcutHelp = "帮助";
+        ShortcutClosePanel = "关闭预览面板";
+        ShortcutCollapseAll = "折叠全部文件夹";
+        ShortcutNextItem = "下一个文件";
+        ShortcutHistoryBack = "上一个文件夹";
+        ShortcutHistoryForward = "下一个文件夹";
+        ShortcutSlideshow = "幻灯片";
+        ShortcutClock = "时钟";
+        ShortcutSavePreset = "保存当前预设";
         MenuAutoDock = "自动停靠到屏幕边缘";
         MenuAutoHideCloseOnLeave = "鼠标离开时关闭";
         MenuAutoHideUseHandle = "使用把手而不是整条边缘";
@@ -1183,6 +1227,14 @@ public static class Strings
         ViewerFilmstrip = "缩略图条";
         MenuFilmstripGrid = "缩略图网格";
         ViewerFullscreen = "全屏";
+        DocumentPreview = "预览";
+        DocumentEdit = "编辑";
+        DocumentPopOut = "弹出查看";
+        DocumentTooLarge = "文件太大，无法在这里打开。请用默认程序打开。";
+        DocumentLoadFailed = "无法打开此文件。";
+        DocumentSaveFailed = "未能保存。";
+        DocumentPickFile = "在树中点选一个文件";
+        DocumentNewTab = "新标签";
         GestureWheelClick = "滚轮单击";
         ViewerFullDesktop = "填满桌面";
         ViewerFullDesktopHint = "保持任务栏可见";
@@ -1320,6 +1372,7 @@ public static class Strings
         AboutAuthorLabel = "作者";
         AboutDateLabel = "日期";
         AboutLicenseLabel = "许可摘要";
+        AboutUpstreamLabel = "上游项目";
         AboutWebsiteLabel = "网站";
         AboutOtherToolLabel = "同一作者的其他工具";
         AboutUpdateAvailableFormat = "下载更新 {0}";
@@ -1492,6 +1545,24 @@ public static class Strings
         ButtonEdgeShadesTip = "Veils the top and bottom ends of a list";
         MenuViewerSideSwapped = "Swap sides";
         MenuDockOnRight = "Pin to right edge";
+        MenuReserveWorkArea = "Make room when others maximize";
+        MenuShortcuts = "Keyboard shortcuts";
+        ShortcutSettingsTitle = "Keyboard shortcuts";
+        ShortcutUnbound = "None";
+        ShortcutPress = "Press a new shortcut…";
+        ShortcutClear = "Clear";
+        ShortcutReset = "Reset";
+        ShortcutHint = "Click a row, then press the keys you want. Explorer keys such as F2, Delete and Ctrl+C stay as they are.";
+        ShortcutSearch = "Search";
+        ShortcutHelp = "Help";
+        ShortcutClosePanel = "Close preview panel";
+        ShortcutCollapseAll = "Collapse all folders";
+        ShortcutNextItem = "Next file";
+        ShortcutHistoryBack = "Back";
+        ShortcutHistoryForward = "Forward";
+        ShortcutSlideshow = "Slideshow";
+        ShortcutClock = "Clock";
+        ShortcutSavePreset = "Save current preset";
         MenuAutoDock = "Auto-dock to screen edge";
         MenuAutoHideCloseOnLeave = "Close on mouse leave";
         MenuAutoHideUseHandle = "Handle instead of full edge";
@@ -1575,6 +1646,14 @@ public static class Strings
         ViewerFilmstrip = "Thumbnail bar";
         MenuFilmstripGrid = "Thumbnail grid";
         ViewerFullscreen = "Full screen";
+        DocumentPreview = "Preview";
+        DocumentEdit = "Edit";
+        DocumentPopOut = "Open in new window";
+        DocumentTooLarge = "This file is too large to open here. Use the default app.";
+        DocumentLoadFailed = "Could not open this file.";
+        DocumentSaveFailed = "Could not save.";
+        DocumentPickFile = "Click a file in the tree";
+        DocumentNewTab = "New tab";
         GestureWheelClick = "Wheel click";
         ViewerFullDesktop = "Fill desktop";
         ViewerFullDesktopHint = "Keeps the taskbar visible";
@@ -1723,6 +1802,7 @@ public static class Strings
         AboutAuthorLabel = "Author";
         AboutDateLabel = "Date";
         AboutLicenseLabel = "License summary";
+        AboutUpstreamLabel = "Upstream project";
         AboutWebsiteLabel = "Website";
         AboutOtherToolLabel = "Other tools by the same maker";
         AboutUpdateAvailableFormat = "Download update {0}";

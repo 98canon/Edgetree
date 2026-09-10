@@ -72,7 +72,7 @@ public partial class AboutWindow : Window
     {
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
-            FileName = "https://github.com/legendsteel11/Edgetree",
+            FileName = "https://github.com/98canon/Edgetree",
             UseShellExecute = true
         });
     }
@@ -81,7 +81,16 @@ public partial class AboutWindow : Window
     {
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
-            FileName = "https://github.com/legendsteel11/Edgetree/releases/latest",
+            FileName = "https://github.com/98canon/Edgetree/releases/latest",
+            UseShellExecute = true
+        });
+    }
+
+    private void UpstreamLink_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "https://github.com/legendsteel11/Edgetree",
             UseShellExecute = true
         });
     }
