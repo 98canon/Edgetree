@@ -106,13 +106,25 @@ public partial class MainWindow : Window
     // hovering with a file. Same 400ms as the re-hide, for one thing to tune.
     private const int AutoHideDragRevealDelayMs = 400;
 
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService = new(
+        App.InstanceSlotId,
+        App.LaunchMonitorDeviceName);
     private AppSettings _settings = new();
     // Observable so a drive can leave and come back without the tree being
     // rebound - hiding a drive root removes it here and the view follows. It
     // was a plain List while the set of roots only ever changed at startup.
     private readonly System.Collections.ObjectModel.ObservableCollection<FileSystemItem> _roots = new();
     private bool _isDocked = true;
+    private bool _usePreferredMonitorForInitialDock;
+    private string? _preferredMonitorDeviceName;
+    private const int AutoDockEdgeThresholdPx = 24;
+    private const int AutoDockDwellMs = 150;
+    private enum AutoDockEdge
+    {
+        None,
+        Left,
+        Right,
+    }
 
     // Remembers the floating window's own bounds across a dock -> undock
     // round trip within the same run (null until the first time this app
@@ -174,6 +186,10 @@ public partial class MainWindow : Window
     private bool _settingsResetPending;
 
     private System.Windows.Point? _headerDragStart;
+    private bool _autoDockMoveActive;
+    private AutoDockEdge _autoDockCandidateEdge = AutoDockEdge.None;
+    private AutoDockEdge _autoDockReadyEdge = AutoDockEdge.None;
+    private System.Windows.Threading.DispatcherTimer? _autoDockTimer;
     private FileSystemItem? _selectedItem;
 
     // What the VIEWER is showing, which is no longer always what the tree has
@@ -364,6 +380,21 @@ public partial class MainWindow : Window
     private const int WM_DEVICECHANGE = 0x0219;
     private const int HTCAPTION = 2;
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+
+        public int Width => Right - Left;
+        public int Height => Bottom - Top;
+    }
+
     private IntPtr SingleInstanceWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == WM_WINDOWPOSCHANGED && (_inTopBandDrag || _inBottomBandDrag))
@@ -409,6 +440,10 @@ public partial class MainWindow : Window
             // and it arrives long before the frame's own leave message would.
             SetMoveHint(false);
         }
+        else if (msg == WM_WINDOWPOSCHANGED)
+        {
+            UpdateAutoDockTracking();
+        }
         else if (msg == WM_ENTERSIZEMOVE)
         {
             // THE HINT STAYS THROUGH THE DRAG (2026-08-17, the author's call:
@@ -422,6 +457,8 @@ public partial class MainWindow : Window
         else if (msg == WM_EXITSIZEMOVE)
         {
             _inCaptionDrag = false;
+            StopAutoDockTimer();
+            _autoDockMoveActive = false;
             // Let go the same way an idle hover does, rather than vanishing the
             // instant the button comes up - the pointer is still on the strip.
             if (ViewerMoveHint.Visibility == Visibility.Visible)
@@ -654,6 +691,8 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object? sender, RoutedEventArgs e)
     {
         _settings = _settingsService.Load();
+        _preferredMonitorDeviceName = _settingsService.EffectiveMonitorDeviceName;
+        _usePreferredMonitorForInitialDock = !string.IsNullOrWhiteSpace(_preferredMonitorDeviceName);
         // 저장에서 들어온 자막 크기를 1080 기준으로 한 번만 옮긴다. 설정을 읽은
         // 바로 다음이 자리인 것은 이 값이 화면에 닿기 전에 끝나야 하기 때문이다.
         BaselineSubtitleFontSize();
@@ -800,6 +839,10 @@ public partial class MainWindow : Window
         ApplyHeaderMetrics();
         SetExpandedContentVisibility(_settings.IsAutoHidden ? Visibility.Collapsed : Visibility.Visible);
         PositionToWorkArea();
+        if (!_settings.IsFloating)
+        {
+            _usePreferredMonitorForInitialDock = false;
+        }
         UpdateResizeThumbVisibility();
 
         // The viewer panel survives restarts. On top of the tree-only Width
@@ -2711,10 +2754,28 @@ public partial class MainWindow : Window
     // only ever asked about the monitor the window is already sitting on
     // (Dock() calls this before moving the window anywhere), so there's no
     // cross-monitor DPI mismatch to resolve.
+    private string? GetCurrentMonitorDeviceName()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        return System.Windows.Forms.Screen.FromHandle(hwnd)?.DeviceName;
+    }
+
     private Rect GetCurrentMonitorWorkArea(DpiScale? dpiScale = null)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
-        var screen = hwnd != IntPtr.Zero
+        System.Windows.Forms.Screen? screen = null;
+        if (_usePreferredMonitorForInitialDock && !string.IsNullOrWhiteSpace(_preferredMonitorDeviceName))
+        {
+            screen = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(candidate =>
+                string.Equals(candidate.DeviceName, _preferredMonitorDeviceName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        screen ??= hwnd != IntPtr.Zero
             ? System.Windows.Forms.Screen.FromHandle(hwnd)
             : System.Windows.Forms.Screen.PrimaryScreen;
         if (screen is null)
@@ -2774,6 +2835,191 @@ public partial class MainWindow : Window
             ABE_TOP => new Rect(area.Left, area.Top + TaskbarRevealStrip, area.Width, area.Height - TaskbarRevealStrip),
             _ => area,
         };
+    }
+
+    private bool IsAutoDockEnabled()
+        => _settings.AutoDockEnabled;
+
+    private bool CanAutoDock => IsAutoDockEnabled() && !_windowIsClosing && !_isDocked && !_settings.IsAutoHidden && !_viewerFullscreen && WindowState == WindowState.Normal;
+
+    private void BeginAutoDockMoveTracking()
+    {
+        _autoDockMoveActive = CanAutoDock;
+        _autoDockCandidateEdge = AutoDockEdge.None;
+        _autoDockReadyEdge = AutoDockEdge.None;
+        StopAutoDockTimer();
+    }
+
+    private void EndAutoDockMoveTracking(bool commit)
+    {
+        bool canCommit = commit && CanAutoDock;
+        _autoDockMoveActive = false;
+        StopAutoDockTimer();
+
+        if (canCommit)
+        {
+            TryAutoDockFromCurrentPosition();
+        }
+
+        _autoDockCandidateEdge = AutoDockEdge.None;
+        _autoDockReadyEdge = AutoDockEdge.None;
+    }
+
+    private void UpdateAutoDockTracking()
+    {
+        if (!CanAutoDock || !_autoDockMoveActive)
+        {
+            StopAutoDockTimer();
+            _autoDockCandidateEdge = AutoDockEdge.None;
+            _autoDockReadyEdge = AutoDockEdge.None;
+            return;
+        }
+
+        var edge = GetAutoDockEdge();
+        if (edge == AutoDockEdge.None)
+        {
+            StopAutoDockTimer();
+            _autoDockCandidateEdge = AutoDockEdge.None;
+            _autoDockReadyEdge = AutoDockEdge.None;
+            return;
+        }
+
+        if (_autoDockCandidateEdge != edge)
+        {
+            _autoDockCandidateEdge = edge;
+            _autoDockReadyEdge = AutoDockEdge.None;
+            StartAutoDockTimer();
+        }
+    }
+
+    private void StartAutoDockTimer()
+    {
+        _autoDockTimer ??= new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(AutoDockDwellMs)
+        };
+        _autoDockTimer.Tick -= AutoDockTimer_Tick;
+        _autoDockTimer.Tick += AutoDockTimer_Tick;
+        _autoDockTimer.Start();
+    }
+
+    private void StopAutoDockTimer()
+    {
+        _autoDockTimer?.Stop();
+    }
+
+    private void AutoDockTimer_Tick(object? sender, EventArgs e)
+    {
+        StopAutoDockTimer();
+
+        if (!CanAutoDock || !_autoDockMoveActive)
+        {
+            return;
+        }
+
+        var edge = GetAutoDockEdge();
+        if (edge != AutoDockEdge.None && edge == _autoDockCandidateEdge)
+        {
+            _autoDockReadyEdge = edge;
+        }
+    }
+
+    private void TryAutoDockFromCurrentPosition()
+    {
+        if (!CanAutoDock)
+        {
+            return;
+        }
+
+        var edge = GetAutoDockEdge();
+        if (edge == AutoDockEdge.None)
+        {
+            edge = _autoDockReadyEdge;
+        }
+
+        if (edge == AutoDockEdge.None)
+        {
+            return;
+        }
+
+        _settings.DockOnRight = edge == AutoDockEdge.Right;
+        Dock();
+    }
+
+    private AutoDockEdge GetAutoDockEdge()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return AutoDockEdge.None;
+        }
+
+        var screen = GetAutoDockScreen();
+        if (screen is null)
+        {
+            return AutoDockEdge.None;
+        }
+
+        if (!GetWindowRect(hwnd, out var windowRect))
+        {
+            return AutoDockEdge.None;
+        }
+
+        var workArea = screen.WorkingArea;
+        if (windowRect.Bottom <= workArea.Top || windowRect.Top >= workArea.Bottom)
+        {
+            return AutoDockEdge.None;
+        }
+
+        int leftDistance = Math.Abs(windowRect.Left - workArea.Left);
+        int rightDistance = Math.Abs(workArea.Right - windowRect.Right);
+        bool leftNear = leftDistance <= AutoDockEdgeThresholdPx;
+        bool rightNear = rightDistance <= AutoDockEdgeThresholdPx;
+
+        if (leftNear && rightNear)
+        {
+            return leftDistance <= rightDistance ? AutoDockEdge.Left : AutoDockEdge.Right;
+        }
+
+        if (leftNear)
+        {
+            return AutoDockEdge.Left;
+        }
+
+        if (rightNear)
+        {
+            return AutoDockEdge.Right;
+        }
+
+        return AutoDockEdge.None;
+    }
+
+    private System.Windows.Forms.Screen? GetAutoDockScreen()
+    {
+        var cursor = System.Windows.Forms.Cursor.Position;
+        double virtualLeft = SystemParameters.VirtualScreenLeft;
+        double virtualTop = SystemParameters.VirtualScreenTop;
+        double virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        double virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        bool cursorOnVirtualScreen =
+            cursor.X >= virtualLeft && cursor.X <= virtualRight &&
+            cursor.Y >= virtualTop && cursor.Y <= virtualBottom;
+
+        if (cursorOnVirtualScreen)
+        {
+            return System.Windows.Forms.Screen.FromPoint(cursor);
+        }
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out var windowRect))
+        {
+            var center = new System.Drawing.Point(
+                windowRect.Left + (windowRect.Width / 2),
+                windowRect.Top + (windowRect.Height / 2));
+            return System.Windows.Forms.Screen.FromPoint(center);
+        }
+
+        return System.Windows.Forms.Screen.PrimaryScreen;
     }
 
     private static double ClampExpandedWidth(double width)
@@ -5059,7 +5305,17 @@ public partial class MainWindow : Window
 
         // Hands the rest of this same mouse gesture off to the native move loop,
         // so the window keeps following the cursor exactly like a title-bar drag.
-        DragMove();
+        BeginAutoDockMoveTracking();
+        bool dragCompleted = false;
+        try
+        {
+            DragMove();
+            dragCompleted = true;
+        }
+        finally
+        {
+            EndAutoDockMoveTracking(dragCompleted);
+        }
     }
 
     private void HeaderGrid_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -5155,7 +5411,17 @@ public partial class MainWindow : Window
 
         // 같은 손짓 그대로 Windows의 이동 루프에 넘긴다. 여기까지 오면 창은 이미
         // 창 모드라, 도킹된 창을 옮기는 일은 일어나지 않는다.
-        DragMove();
+        BeginAutoDockMoveTracking();
+        bool dragCompleted = false;
+        try
+        {
+            DragMove();
+            dragCompleted = true;
+        }
+        finally
+        {
+            EndAutoDockMoveTracking(dragCompleted);
+        }
     }
 
     private void FullscreenUndockStrip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -8903,6 +9169,7 @@ public partial class MainWindow : Window
             // exact shape of the v1.3.4/v1.4.0 menu breakages.
             if (FindMenuItem(generalSettings, "alwaysOnTop") is { } alwaysOnTop &&
                 FindMenuItem(generalSettings, "dockOnRight") is { } dockOnRight &&
+                FindMenuItem(generalSettings, "autoDock") is { } autoDock &&
                 FindMenuItem(generalSettings, "startWithWindows") is { } startWithWindows &&
                 FindMenuItem(generalSettings, "trayIcon") is { } trayIcon &&
                 FindMenuItem(generalSettings, "showFolderIcons") is { } showFolderIcons &&
@@ -8926,6 +9193,7 @@ public partial class MainWindow : Window
             {
                 alwaysOnTop.IsChecked = _settings.AlwaysOnTop;
                 dockOnRight.IsChecked = _settings.DockOnRight;
+                autoDock.IsChecked = _settings.AutoDockEnabled;
                 startWithWindows.IsChecked = _settings.StartWithWindows;
                 trayIcon.IsChecked = _settings.AlwaysShowTrayIcon;
                 showFolderIcons.IsChecked = _settings.ShowFolderIcons;
@@ -9019,7 +9287,8 @@ public partial class MainWindow : Window
             // it read `[_, MenuItem, MenuItem]` for 언어 - a pattern that also
             // had to know the restart note leads the list, so the note and the
             // reader were two places holding one fact.
-            SetMenuItemChecked(languageMenu, "ko", _settings.Language != "en");
+            SetMenuItemChecked(languageMenu, "ko", _settings.Language == "ko");
+            SetMenuItemChecked(languageMenu, "zh-CN", _settings.Language == "zh-CN");
             SetMenuItemChecked(languageMenu, "en", _settings.Language == "en");
 
             SetMenuItemChecked(iconStyleMenu, "default", !_settings.UseShellIcons);
@@ -10988,6 +11257,15 @@ public partial class MainWindow : Window
             // can never be reached by the mouse again. ApplyTopmostState owns
             // that rule (and the writing-through problem) for every caller.
             ApplyTopmostState("always-on-top toggle");
+            _settingsService.Save(_settings);
+        }
+    }
+
+    private void AutoDockMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem)
+        {
+            _settings.AutoDockEnabled = menuItem.IsChecked;
             _settingsService.Save(_settings);
         }
     }
@@ -22176,6 +22454,7 @@ public partial class MainWindow : Window
 
         AdoptStoredFloatingBounds();
         Undock(offsetFromCorner: true);
+        _usePreferredMonitorForInitialDock = false;
     }
 
     // ----- 저장에서 들어온 창 기하를 지금 화면에 맞추기 ------------------------
@@ -22238,6 +22517,7 @@ public partial class MainWindow : Window
     // 마지막으로 알던 값을 그대로 둔다.
     private void StoreFloatingState()
     {
+        _settingsService.SetCurrentMonitorDeviceName(GetCurrentMonitorDeviceName());
         _settings.IsFloating = !_isDocked;
 
         // FILTERED ON THE WAY IN, because these four are the only numbers in
@@ -32894,10 +33174,13 @@ public partial class MainWindow : Window
     // here follows the switch in the options menu, and a Korean app writing
     // "Sunday, August 16" over its own panel would be the one line that did
     // not.
-    private static System.Globalization.CultureInfo ViewerClockCulture
-        => Strings.IsEnglish
-            ? System.Globalization.CultureInfo.GetCultureInfo("en-US")
-            : System.Globalization.CultureInfo.GetCultureInfo("ko-KR");
+    private System.Globalization.CultureInfo ViewerClockCulture
+        => _settings.Language switch
+        {
+            "en" => System.Globalization.CultureInfo.GetCultureInfo("en-US"),
+            "zh-CN" => System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),
+            _ => System.Globalization.CultureInfo.GetCultureInfo("ko-KR"),
+        };
 
     // NOT gated on the slideshow (2026-08-16, the same day it was first built
     // that way). It draws on whatever the panel is showing, so the only thing

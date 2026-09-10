@@ -1870,6 +1870,10 @@
                         IsCheckable="True"
                         AutomationProperties.AutomationId="dockOnRight"
                         Click="DockOnRightMenuItem_Click"/>
+                <MenuItem Header="{x:Static services:Strings.MenuAutoDock}"
+                        IsCheckable="True"
+                        AutomationProperties.AutomationId="autoDock"
+                        Click="AutoDockMenuItem_Click"/>
                 <MenuItem Header="{x:Static services:Strings.MenuStartWithWindows}"
                         IsCheckable="True"
                         AutomationProperties.AutomationId="startWithWindows"
@@ -2550,6 +2554,10 @@
                 <MenuItem Header="한국어"
                         IsCheckable="True"
                         Tag="ko"
+                        Click="LanguageMenuItem_Click"/>
+                <MenuItem Header="简体中文"
+                        IsCheckable="True"
+                        Tag="zh-CN"
                         Click="LanguageMenuItem_Click"/>
                 <MenuItem Header="English"
                         IsCheckable="True"

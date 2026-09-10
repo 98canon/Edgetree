@@ -17,28 +17,12 @@ public partial class App : Application
     private System.Drawing.Icon? _trayUpdateIcon;
     private IntPtr _trayUpdateIconHandle;
 
-    // Held for the app's whole lifetime (a field, not a local) so it isn't
-    // released early by the GC - see OnStartup/OnExit.
-    private Mutex? _singleInstanceMutex;
+    private InstanceCoordinator? _instanceCoordinator;
 
-    // How a second launch reaches the instance that is already running. Named,
-    // so the two processes need nothing else in common - the same reasoning the
-    // mutex above is named for.
-    //
-    // This replaced a PostMessage to HWND_BROADCAST (2026-08-13). A broadcast
-    // reaches every top-level window "including disabled or invisible UNOWNED
-    // windows" - and this app's window is owned for most of its life: docked
-    // means ShowInTaskbar=false, and WPF implements that by parking the window
-    // under a hidden owner. So the message went out and simply never arrived,
-    // in exactly the state the app normally sits in. Measured, not deduced: the
-    // tray's own routes into RestoreMainWindow worked in the same session where
-    // re-running the exe did nothing at all.
-    //
-    // A kernel event has no opinion about window styles, ownership, z-order or
-    // visibility, which is what makes it the right shape for "the window may be
-    // a sliver, hidden to the tray, or behind everything".
-    private EventWaitHandle? _activateSignal;
-    private RegisteredWaitHandle? _activateWait;
+    // Set before StartupUri creates MainWindow. Each launch gets its own slot and
+    // starts on the monitor where the pointer was when the process was opened.
+    public static int InstanceSlotId { get; private set; }
+    public static string? LaunchMonitorDeviceName { get; private set; }
 
     // Minimize-to-tray (MainWindow's "_" button calls Hide(), not Close()) needs
     // some way back - so the icon stays visible regardless of the "always show
@@ -180,49 +164,29 @@ public partial class App : Application
         }
     }
 
+    private static string? DetectLaunchMonitorDeviceName()
+    {
+        try
+        {
+            return Screen.FromPoint(Cursor.Position)?.DeviceName;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Named (not per-version) so an old build and a freshly built one
-        // still see each other as the same app - the whole point is blocking
-        // duplicate launches regardless of which exe/version is running.
-        _singleInstanceMutex = new Mutex(true, "Local\\Edgetree-SingleInstance-8f1d6b2e-4a3f-4c9e-9b1a-2d7e5c6f8a90", out bool createdNew);
-        _activateSignal = new EventWaitHandle(false, EventResetMode.AutoReset,
-            "Local\\Edgetree-Activate-8f1d6b2e-4a3f-4c9e-9b1a-2d7e5c6f8a90");
-
-        if (!createdNew)
-        {
-            // Another Edgetree process already holds the mutex - ask it to
-            // come to the foreground instead of opening a second window, and
-            // exit before constructing anything (window, tray icon, Strings)
-            // so there's no flicker. Deliberately no "already running" notice:
-            // the answer to launching an app that is already up is the app,
-            // not a dialog about it.
-            //
-            // Windows' foreground lock would otherwise hold the other process's
-            // window behind whatever is in front, since this process is the one
-            // that was just launched; handing our claim over is what lets the
-            // restore actually surface.
-            NativeMethods.AllowNextWindowToActivate();
-            _activateSignal.Set();
-            Environment.Exit(0);
-        }
-
-        // Fires on a pool thread whenever a later launch signals, for as long
-        // as this process lives (executeOnlyOnce: false - the exe can be run
-        // any number of times). Hopped onto the UI thread because everything
-        // RestoreMainWindow touches is a window.
-        _activateWait = ThreadPool.RegisterWaitForSingleObject(
-            _activateSignal,
-            (_, _) => Dispatcher.BeginInvoke(new Action(RestoreMainWindow)),
-            state: null,
-            millisecondsTimeOutInterval: Timeout.Infinite,
-            executeOnlyOnce: false);
+        _instanceCoordinator = InstanceCoordinator.Acquire();
+        InstanceSlotId = _instanceCoordinator.SlotId;
+        LaunchMonitorDeviceName = DetectLaunchMonitorDeviceName();
 
         // Must run before base.OnStartup(e) - that call is what actually
         // constructs the StartupUri (MainWindow) window, and every x:Static
         // Strings.* reference in its XAML resolves to whatever's in these
         // fields at that exact moment.
-        Strings.Initialize(new SettingsService().Load().Language);
+        Strings.Initialize(new SettingsService(InstanceSlotId, LaunchMonitorDeviceName).Load().Language);
 
         // BeginSession first: it stamps the post-mortem of the previous
         // session, which reads better above this session's own start line.
@@ -620,12 +584,7 @@ public partial class App : Application
             NativeMethods.DestroyIcon(_trayUpdateIconHandle);
         }
         _trayBaseIcon?.Dispose();
-        // The wait before the handle it waits on, or the callback can be handed
-        // a disposed event on its way out.
-        _activateWait?.Unregister(null);
-        _activateSignal?.Dispose();
-        _singleInstanceMutex?.ReleaseMutex();
-        _singleInstanceMutex?.Dispose();
+        _instanceCoordinator?.Dispose();
         base.OnExit(e);
     }
 }

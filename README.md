@@ -147,7 +147,7 @@ leaves them where they are.
   scrollbar width are all adjustable — icons and menus scale along.
 - **Sharp at any display scale** (125%, 150%, 200%…): rendered at the
   actual scale instead of being stretched.
-- **Korean and English UI.**
+- **Korean, English, and Simplified Chinese UI.**
 - **Presets**: keep the whole shape of the app — window mode, position, size,
   docking, colors, file types and the current folder — as up to five presets.
   `Ctrl+1`–`Ctrl+5` switches between them and `Ctrl+Shift+S` overwrites the

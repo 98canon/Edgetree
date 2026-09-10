@@ -1,4 +1,4 @@
-﻿namespace SidebarExplorer.App.Services;
+namespace SidebarExplorer.App.Services;
 
 // Language switch is restart-only (not live): fields default to Korean and
 // Initialize(), called once in App.OnStartup before base.OnStartup(e) builds
@@ -285,6 +285,7 @@ public static class Strings
     // Inside the 멀티미디어 패널 submenu, so the subject is already named.
     public static string MenuViewerSideSwapped = "좌우 위치 반전";
     public static string MenuDockOnRight = "고정 위치 오른쪽";
+    public static string MenuAutoDock = "가장자리에 자동 고정";
     public static string MenuAutoHideCloseOnLeave = "마우스 이탈 시 닫기";
     public static string MenuAutoHideUseHandle = "숨김 시 손잡이만";
     public static string MenuAutoHideSlide = "숨김 애니메이션";
@@ -302,17 +303,10 @@ public static class Strings
     public static string MenuAbout = "앱 정보";
     public static string HelpTitle = "Edgetree 도움말";
 
-    // Fixed, deliberately not switched by Initialize() below - shown the same
-    // in either language rather than "언어 / Language", since the word
-    // "Language" alone is already understood regardless of which one a user
-    // currently reads.
-    public static readonly string MenuLanguage = "Language";
-
-    // Fixed, deliberately not switched by Initialize() below - same reasoning
-    // as MenuLanguage just above: whichever language a user currently reads,
-    // they need to understand this note about the *other* one before they
-    // click it, so it always shows both.
-    public static readonly string LanguageRestartNote = "(재시작 필요 / Restart required)";
+    // These labels are initialized with the Korean defaults and replaced by
+    // Initialize() for English or Simplified Chinese before the XAML loads.
+    public static string MenuLanguage = "언어";
+    public static string LanguageRestartNote = "(재시작 필요)";
 
     // Per-folder right-click menu's own sort submenu ("정렬 방식") reuses
     // MenuSort/MenuSortByName/etc. below - this is only the options-menu
@@ -977,35 +971,407 @@ public static class Strings
 
     // Which language the fields below ended up in. Almost nothing needs to ask
     // - the point of this class is that callers just read a string - but a
-    // BILINGUAL subtitle file has to be told which of its two tracks to play,
+    // A language-dependent subtitle file has to be told which track to play,
     // and the app's own language is the only answer that isn't a guess (see
     // SubtitleService).
     public static bool IsEnglish { get; private set; }
+    public static bool IsSimplifiedChinese { get; private set; }
 
     public static void Initialize(string language)
     {
-        if (language != "en")
-        {
-#if INSTRUMENT
-            // A measuring build (-p:EdgetreeInstrument=true) is Release code with the
-            // DEBUG instruments compiled back in, so it would otherwise call
-            // itself DEBUG and its numbers would be filed under the wrong
-            // build. See the Instrument property in Edgetree.csproj.
-            RootPathLabel += " (계측)";
-#elif DEBUG
-            // A quick, unmistakable way to tell a freshly-built Debug run
-            // apart from any already-running instance the single-instance
-            // mutex (see App.OnStartup) might otherwise silently defer to -
-            // e.g. an old Release/tray instance from before this launch that
-            // makes it look like a rebuild "didn't take effect" when it's
-            // actually just not the window on screen. Compiled out entirely
-            // in Release (RootPathLabel never gets this suffix there).
-            RootPathLabel += " (DEBUG)";
-#endif
-            return;
-        }
+        IsEnglish = false;
+        IsSimplifiedChinese = false;
 
+        if (language is "zh-CN" or "zh-SG" or "zh-Hans" or "zh-Hans-CN" or "zh-Hans-SG")
+        {
+            IsSimplifiedChinese = true;
+            MenuLanguage = "语言";
+            LanguageRestartNote = "（需要重启）";
+        MenuBookmark = "书签";
+        MenuBookmarkAdd = "添加书签";
+        MenuBookmarkRemove = "删除书签";
+        MenuBookmarkList = "书签";
+        MenuBookmarkListEmpty = "没有书签";
+        MenuPresetAdd = "添加预设";
+        MenuPresetApply = "应用";
+        MenuPresetOverwrite = "覆盖…";
+        MenuPresetRename = "重命名…";
+        PresetSaveTitle = "保存当前设置";
+        PresetRenameTitle = "重命名预设";
+        MenuPresetDelete = "删除";
+        PresetNameTitle = "预设名称";
+        PresetNameHint = "保存位置、大小、停靠、颜色、文件类型和当前文件夹";
+        PresetDefaultName = "预设{0}";
+        PresetSavedToast = "预设已保存";
+        PlaceMissingTitle = "未找到项目";
+        PlaceMissingBody = "找不到该项目。\n\n{0}\n\n将其从列表中删除？";
+        PresetSlotEmptyTitle = "预设";
+        PresetSlotEmptyBody = "尚无预设 {0}。\n要在这里保存当前设置吗？";
+        MenuFileFilter = "文件类型";
+        FilterChipExecutable = "程序";
+        MenuFileFilterAll = "全部";
+        MenuFileFilterCode = "代码";
+        MenuFileFilterImage = "图片";
+        MenuFileFilterDocument = "文档";
+        MenuFileFilterMedia = "媒体";
+        MenuFileFilterArchive = "压缩包";
+        MenuFileFilterExecutable = "程序和快捷方式";
+        MenuFileFilterOther = "其他";
+        MenuFileFilterCustomEdit = "自定义…";
+        FilterCustomTitle = "自定义扩展名";
+        FilterCustomHint = "用逗号分隔 · txt、png、.mp3";
+        FilterCustomEmptyHint = "留空并确认后，自定义项将被移除";
+        MenuFileFilterExcludeEdit = "排除…";
+        FilterExcludeTitle = "要排除的扩展名";
+        FilterExcludeHint = "用逗号分隔 · 这里写的内容会始终隐藏";
+        FilterExcludeEmptyHint = "留空并确认后，排除项将被移除";
+        ButtonOk = "确定";
+        ButtonCancel = "取消";
+        MenuFontWeight = "字体粗细";
+        MenuFontWeightNormal = "常规";
+        MenuFontWeightBold = "加粗";
+        MenuFontWeightFoldersOnly = "仅文件夹加粗";
+        MenuFontWeightFilesOnly = "仅文件加粗";
+        MenuSidePanel = "书签面板";
+        MenuSidePanelShow = "显示";
+        MenuHideFolder = "排除";
+        MenuHiddenFolderList = "排除的文件夹";
+        MenuHiddenFolderListEmpty = "没有排除的文件夹";
+        MenuUnhideFolder = "停止排除";
+        MenuNetworkLocations = "网络位置";
+        MenuNetworkLocationAdd = "添加位置…";
+        MenuNetworkLocationsEmpty = "尚未添加位置";
+        MenuNetworkLocationRemove = "从列表中移除";
+        NetworkLocationPromptTitle = "添加网络位置";
+        NetworkLocationPromptHint = "输入 \\\\server\\share 或文件夹路径。映射到驱动器号的内容已经在列表中。";
+        NetworkLocationUnreachableTitle = "无法连接";
+        NetworkLocationUnreachableBody = "{0}\n\n没有回应。仍然将其添加到列表中吗？";
+        NetworkLocationDuplicateTitle = "已在列表中";
+        MenuListRowRemove = "移除";
+        HiddenClearAllConfirmTitle = "清除所有排除项";
+        HiddenClearAllConfirmBody = "要再次显示所有排除的文件夹吗？ ({0})";
+        MenuBookmarkClearAll = "全部清除";
+        BookmarkClearAllConfirmTitle = "清除所有书签";
+        BookmarkClearAllConfirmBody = "要清除所有书签吗？ ({0})";
+        BookmarkShortcutNext = "下一个书签";
+        BookmarkShortcutPrev = "上一个书签";
+        MenuNewFolder = "新建文件夹";
+        MenuRefresh = "刷新";
+        MenuPathBarAtTop = "在顶部显示路径栏";
+        MenuExpandOnSingleClick = "单击即可展开";
+        MenuAutoCollapse = "自动折叠文件夹";
+        MenuCollapseAllExpanded = "折叠所有文件夹";
+        CollapseAllConfirmTitle = "折叠所有文件夹";
+        CollapseAllConfirmBody = "折叠所有展开的文件夹？\n\n扩展的内容不会被记住，因此无法撤消。";
+        MenuOpen = "在默认应用程序中打开";
+        MenuExpandFolder = "扩张";
+        MenuCollapseFolder = "坍塌";
+        MenuViewHere = "看法";
+        MenuPlayHere = "玩";
+        MenuOpenWith = "打开方式";
+        MenuCut = "切";
+        MenuCopy = "复制";
+        MenuPaste = "粘贴";
+        MenuSelectAll = "选择全部";
+        MenuCompress = "压缩";
+        MenuExtract = "提炼";
+        MenuRename = "重命名";
+        MenuDelete = "删除";
+        MenuCopyPath = "复制路径";
+        MenuMultiSelectionInfo = "已选择 {0} 项";
+        MenuOpenTerminal = "在终端中打开";
+        MenuOpenWithCode = "用 Code 打开";
+        MenuRevealInExplorer = "在资源管理器中显示";
+        MenuRevealInTree = "在树中显示";
+        GestureDoubleClick = "双击";
+        MenuCreateShortcut = "创建快捷方式";
+        MenuProperties = "特性";
+        MenuAlwaysOnTop = "始终置顶";
+        MenuGeneralSettings = "常规设置";
+        MenuStartWithWindows = "随 Windows 启动";
+        MenuAlwaysShowTrayIcon = "始终显示托盘图标";
+        MenuShowHiddenItems = "显示隐藏和系统项";
+        MenuShowFolderIcons = "显示文件夹图标";
+        MenuShowFileIcons = "显示文件图标";
+        MenuShowDriveIcons = "显示驱动器图标";
+        MenuTitleBarTitle = "标题栏文字";
+        MenuTitleBarMyComputerIcon = "显示“此电脑”图标";
+        MenuDragMoves = "拖动时移动（按住 Ctrl 可复制）";
+        MenuShowPanelDividers = "显示面板分隔线";
+        MenuSidePanelAtBottom = "在底部显示";
+        ButtonEdgeShades = "阴影";
+        ButtonEdgeShadesTip = "为列表顶部和底部添加阴影";
+        MenuViewerSideSwapped = "交换两侧";
+        MenuDockOnRight = "固定到右侧边缘";
+        MenuAutoDock = "自动停靠到屏幕边缘";
+        MenuAutoHideCloseOnLeave = "鼠标离开时关闭";
+        MenuAutoHideUseHandle = "使用把手而不是整条边缘";
+        MenuAutoHideSlide = "滑动动画";
+        MenuAutoHideSliverWidth = "自动隐藏宽度";
+        MenuColorSettings = "颜色设置";
+        ColorSwatchTooltip = "单击：颜色选择器 · 右键单击：输入颜色代码";
+        ColorHexInputHint = "#RRGGBB · 回车应用，Esc 取消";
+        MenuRestart = "重新启动";
+        MenuHelp = "帮助";
+        MenuAbout = "关于";
+        HelpTitle = "Edgetree 帮助";
+        MenuIconStyle = "图标样式";
+        MenuIconStyleDefault = "默认";
+        MenuIconStyleShell = "Windows 资源管理器";
+        MenuDefaultSort = "默认排序";
+        MenuSort = "排序方式";
+        MenuSortByName = "名称";
+        MenuSortByDate = "修改日期";
+        MenuSortByType = "类型";
+        MenuSortBySize = "大小";
+        MenuSortAscending = "升序";
+        MenuSortDescending = "降序";
+        MenuFollowParentSort = "继承排序";
+        MenuSearchInFolder = "在当前文件夹中搜索";
+        SortTooltipFormat = "按 {0} 排序";
+        SortModeFollowGlobal = "继承的排序";
+        SortModeFolderGroup = "按文件夹分组";
+        SortModeNameAsc = "名称升序";
+        SortModeNameDesc = "名称降序";
+        SortModeDateAsc = "日期升序";
+        SortModeDateDesc = "日期降序";
+        MenuFontSize = "字体大小（Ctrl +/-）";
+        MenuMaxItemsPerFolder = "每个文件夹的项目数";
+        MenuMaxItemsAll = "显示全部";
+        MenuTabSpacing = "缩进宽度";
+        MenuRowSpacing = "行间距";
+        MenuScrollBarThickness = "滚动条宽度";
+        MenuExportSettings = "导出设置…";
+        MenuImportSettings = "导入设置…";
+        MenuResetSettings = "重置所有设置…";
+        ToolTipPinLeft = "固定到左侧";
+        ToolTipPinRight = "固定到右侧";
+        ToolTipPinAutoHide = "自动隐藏";
+        ToolTipPinStayOpen = "固定并保持打开";
+        ToolTipCollapseAll = "折叠所有文件夹（Shift+单击：不恢复）";
+        ToolTipRestoreExpanded = "恢复展开的文件夹（Shift+单击：折叠，不恢复）";
+        ToolTipOptions = "选项";
+        ToolTipUpdateAvailable = "版本 {0} 可供下载";
+        ToolTipMinimize = "最小化到托盘";
+        ToolTipPutAway = "把应用程序收起来";
+        ToolTipClose = "出口";
+        RootPathLabel = "此电脑";
+        MenuThumbnailMaxSize = "缩略图最大大小";
+        ShowMoreFormat = "… 显示更多 {0} 个";
+        ShowLessFormat = "… 隐藏 {0} 个";
+        FilterHiddenFormat = "… 被筛选隐藏：{0}";
+        HiddenFolderNoticeFormat = "… 排除的文件夹：{0}";
+        FilterAndHiddenFormat = "… 被筛选隐藏：{0} · 排除的文件夹：{1}";
+        FolderEmptyLabel = "… 空文件夹";
+        ToolTipSearch = "搜索（Ctrl+F）";
+        ToolTipViewer = "多媒体面板";
+        ViewerZoomFit = "适合";
+        ViewerZoomActual = "1:1";
+        ViewerZoomFill = "填充";
+        ViewerNavigator = "导航器";
+        ViewerClose = "关闭多媒体面板";
+        FooterNowPlayingOpen = "在多媒体面板中打开";
+        FooterHeldFilmResume = "继续播放";
+        ViewerNowPlayingLabel = "正在播放";
+        ViewerBackToPlaying = "返回正在播放的曲目";
+        MenuSetWallpaper = "设为桌面背景";
+        TreeHistoryBack = "后退（Ctrl+←）";
+        TreeHistoryForward = "前进（Ctrl+→）";
+        TreeHistoryList = "你去过的文件夹（右键单击后退/前进）";
+        ViewerPrevImage = "上一张图片";
+        ViewerNextImage = "下一张图片";
+        ViewerFilmstrip = "缩略图条";
+        MenuFilmstripGrid = "缩略图网格";
+        ViewerFullscreen = "全屏";
+        GestureWheelClick = "滚轮单击";
+        ViewerFullDesktop = "填满桌面";
+        ViewerFullDesktopHint = "保持任务栏可见";
+        MenuImageViewer = "多媒体面板";
+        MenuPrecacheThumbnails = "预加载图片缩略图";
+        MenuOpenMediaInViewer = "双击打开";
+        MenuViewerFollowsSelection = "随选择展开";
+        MenuSlideshow = "幻灯片放映";
+        MenuSlideshowSeconds = "每张图片的秒数";
+        MenuViewerClock = "时钟和日期";
+        MenuViewerClockSize = "时钟大小";
+        ViewerClockTimeFormat = "h:mm";
+        ViewerClockDateFormat = "dddd, MMMM d";
+        MenuClearThumbnailCache = "清理缩略图文件";
+        MenuClearThumbnailCacheSized = "清理缩略图文件（{0}）";
+        ViewerPrecaching = "正在预加载 {0}";
+        ViewerMarkedCount = "已选中 {0} 个";
+        ViewerMarkAdd = "视频书签";
+        ViewerMarkList = "视频书签";
+        ViewerRewind = "回到开头";
+        ViewerPrevTrack = "上一曲";
+        ViewerNextTrack = "下一曲";
+        ViewerPrevVideo = "上一个视频";
+        ViewerNextVideo = "下一个视频";
+        ViewerZoom = "视频大小";
+        ViewerZoomPicture = "图片大小";
+        ViewerFitWindow = "将窗口适配到视频";
+        ViewerSubtitles = "字幕";
+        ViewerSubtitleSize = "字幕大小";
+        ViewerSubtitlePosition = "字幕位置";
+        ViewerSubtitleSync = "字幕同步（秒）";
+        ViewerMarkClear = "清除全部";
+        ViewerHdrToneMap = "HDR 色彩校正";
+        ViewerHdrBrightness = "  亮度";
+        ViewerHdrSaturation = "  饱和度";
+        ViewerHdrContrast = "  对比度";
+        ViewerMediaOpening = "正在打开…";
+        ViewerMediaOpeningSlow = "正在打开… 这需要一点时间";
+        ViewerMediaOpenGaveUp = "没有响应 — 已取消播放";
+        ViewerMediaStalled = "正在等待文件…";
+        ViewerPlay = "播放";
+        ViewerPause = "暂停";
+        ViewerStop = "停止";
+        ViewerMute = "静音";
+        ViewerRepeatOff = "不继续播放";
+        ViewerRepeatAll = "循环当前文件夹";
+        ViewerRepeatOne = "单曲循环";
+        ViewerRepeatShuffle = "随机循环";
+        ViewerRepeatHint = "右键单击可更改";
+        ViewerBackgroundPlay = "后台播放 · 在其他文件夹中继续播放";
+        ViewerFolderItemCount = "这里可以显示 {0} 个";
+        ViewerFolderPlayAll = "播放此文件夹";
+        ViewerPlaybackUnsupported = "此格式无法在此处播放 · 按 Enter 用默认应用程序打开它";
+        ViewerPlaybackInterrupted = "播放已停止 · 按播放继续，按 Enter 用默认应用程序打开它";
+        ViewerNoAudio = "没有声音";
+        ViewerOpenExternally = "在默认应用程序中打开";
+        ToolTipExitSearch = "返回资源管理器（Ctrl+E）";
+        SearchTooltipBrowseFolder = "选择要搜索的文件夹";
+        SearchTooltipRefresh = "重新索引";
+        SearchTooltipRefreshStale = "重新索引 · 此文件夹已更改";
+        SearchTooltipHistory = "最近搜索";
+        SearchHistoryDeleteTooltip = "移除此搜索";
+        SearchBrowseFolderDialogTitle = "选择要搜索的文件夹";
+        SearchScopeNone = "选择要搜索的文件夹 →";
+        SearchBoxPlaceholder = "搜索";
+        PathBarPlaceholder = "输入路径，按 Enter";
+        SearchStatusScanning = "正在建立索引… ({0}) · 现在可以搜索";
+        SearchStatusResults = "找到 {0} 项";
+        SearchStatusResultsCapped = "显示 {0} / {1}";
+        SearchStatusNoResults = "没有结果";
+        SearchStatusNoResultsCached = "没有结果 · 索引来自 {0} · 刷新以更新";
+        SearchStatusIndexAgeSuffix = " · 索引来自 {0}";
+        SearchStatusCached = "索引来自 {0} · 刷新以更新";
+        SearchAgeJustNow = "刚刚";
+        SearchAgeMinutes = "{0} 分钟前";
+        SearchAgeHours = "{0} 小时前";
+        SearchAgeDays = "{0}天前";
+        SearchResultMissing = "该文件已删除或移动";
+        SearchStatusTooBroad = "范围太宽 · 添加一个字母或数字";
+        SearchStatusEmpty = "子字符串 · * ? 通配符 · ↑↓ 历史";
+        SearchStatusScopeMissing = "文件夹缺失 · 刷新或重新选择";
+        ColorSettingsTitle = "颜色设置";
+        ColorLabelBackground = "资源管理器背景";
+        ColorLabelFolderNameFont = "文件夹名称";
+        ColorLabelFolderNameHighlightFont = "文件夹名称高亮";
+        ColorLabelFileNameFont = "文件名";
+        ColorLabelFileNameHighlightFont = "文件名高亮";
+        ColorLabelSelection = "选中项";
+        ColorLabelSelectionZone = "选中文件夹区域";
+        ColorLabelHistory = "书签面板背景";
+        ColorLabelHoverBackground = "鼠标悬停";
+        ColorLabelFolderNameHoverFont = "文件夹名称悬停";
+        ColorLabelFileNameHoverFont = "文件名悬停";
+        ColorLabelShowMore = "显示更多";
+        ColorLabelPanelNameFont = "书签名称";
+        ColorLabelPanelNameHighlightFont = "书签名称高亮";
+        ColorLabelPanelNameHoverFont = "书签名称悬停";
+        ColorLabelGuideLine = "引导线";
+        ColorLabelGuideLineActive = "引导线高亮";
+        ColorLabelExpander = "展开箭头";
+        ColorLabelFilterChipChecked = "筛选芯片开启";
+        ColorLabelFilterChipCheckedFont = "芯片开启文字";
+        ColorLabelFilterChipExclude = "排除芯片关闭文字";
+        ColorLabelFilterChipExcludeChecked = "排除芯片开启";
+        ColorLabelHeader = "标题栏背景";
+        ColorLabelPanelDivider = "面板分隔线";
+        ColorLabelViewerBackground = "多媒体面板背景";
+        ColorLabelAutoHideHandle = "自动隐藏把手/边条";
+        ButtonDefaults = "默认值";
+        ButtonClose = "关闭";
+        ButtonExportColors = "导出";
+        ButtonImportColors = "导入";
+        ColorFileFilter = "Edgetree 颜色 (*.json)|*.json";
+        ColorFileDefaultName = "edgetree-colors.json";
+        ColorImportFailedTitle = "导入颜色失败";
+        ColorImportFailedBody = "该文件不包含颜色。";
+        SettingsSaveFailedTitle = "设置保存失败";
+        SettingsSaveFailedBody = "您的设置无法保存。您所做的更改将在应用关闭时丢失。\n\n{0}";
+        ColorThemeDarkMode = "深色";
+        ColorThemeLightMode = "浅色";
+        ButtonRandomColors = "随机";
+        ButtonMonoColors = "单色";
+        ButtonMonoColorsTip = "一键灰阶";
+        ColorChainTip = "链 · 一起点亮的行共享一种颜色";
+        ButtonRandomColorsTip = "自然搭配的组合";
+        ButtonDaringColors = "大胆";
+        ButtonDaringColorsTip = "从主色调出发的更大胆组合";
+        ButtonUndoRandom = "撤销";
+        ColorThemeDarkLabel = "深色模式";
+        ColorThemeLightLabel = "浅色模式";
+        ColorResetConfirmTitle = "重置颜色";
+        ColorResetConfirmBody = "这将重置您在 {0} 中设置的颜色。继续？";
+        AboutTitle = "关于";
+        AboutVersionLabel = "版本";
+        AboutAuthorLabel = "作者";
+        AboutDateLabel = "日期";
+        AboutLicenseLabel = "许可摘要";
+        AboutWebsiteLabel = "网站";
+        AboutOtherToolLabel = "同一作者的其他工具";
+        AboutUpdateAvailableFormat = "下载更新 {0}";
+        AboutLicenseSummary = "MIT 许可证。按原样提供，不附带任何担保；是否使用由您自行决定。";
+        AboutIconLicenseLabel = "图标";
+        AboutIconLicenseValue = "文件和文件夹图标：Material Icon Theme (MIT)\n界面图标：Material Symbols，Google（Apache 许可证 2.0）";
+        AboutIconLicenseOpen = "查看 Apache 许可证 2.0";
+        TrayOpen = "打开";
+        TrayHide = "隐藏到托盘";
+        TrayAbout = "关于";
+        TrayExit = "退出";
+        UpdateAvailableRow = "新更新 - v{0}";
+        PasteFailedTitle = "粘贴失败";
+        MoveIntoSelfError = "文件夹不能移动到自身或其子文件夹中。";
+        CopyIntoSelfError = "文件夹不能复制到自身或其子文件夹中。";
+        NewFolderFailedTitle = "创建文件夹失败";
+        RenameFailedTitle = "重命名失败";
+        NewFolderDefaultName = "新建文件夹";
+        RenameFailedBody = "无法重命名此项目。";
+        DeleteConfirmTitle = "确认删除";
+        DeleteConfirmBody = "将“{0}”移到回收站吗？";
+        DeleteConfirmBodyMultiple = "将选中的 {0} 个项目移到回收站吗？";
+        DeleteFailedShellBody = "无法删除。（错误 {0}）";
+        DeleteNoRecycleBinTitle = "从网络位置删除";
+        DeleteNoRecycleBinBody = "删除“{0}”吗？\n\n网络位置没有回收站，因此无法撤销。";
+        DeleteNoRecycleBinBodyMultiple = "从网络位置删除 {0} 个项目吗？\n\n网络位置没有回收站，因此无法撤销。";
+        DeleteHiddenInsideTitle = "包含排除文件夹";
+        DeleteHiddenInsideBody = "“{0}” 将被删除。\n\n其中包含的排除文件夹：{1}\n\n仍要删除吗？";
+        DeleteHiddenInsideBodyMultiple = "所选项目将被删除。\n\n其中包含的排除文件夹：{0}\n\n仍要删除吗？";
+        DeleteFailedTitle = "删除失败";
+        CompressFailedTitle = "压缩失败";
+        ExtractFailedTitle = "解压失败";
+        CompressSkippedBody = "{0} 个无法读取的项目已跳过。";
+        StartWithWindowsFailedTitle = "随 Windows 启动";
+        StartWithWindowsFailedBody = "注册为启动程序失败。可能受到管理员策略限制。";
+        LanguageChangeTitle = "语言更改";
+        LanguageChangeBody = "更改语言需要重新启动应用程序。现在重新启动？";
+        ImportFailedTitle = "导入失败";
+        OverwriteConfirmTitle = "确认覆盖";
+        OverwriteConfirmBody = "“{0}” 已存在。要覆盖吗？";
+        ExportSettingsFailedTitle = "导出设置失败";
+        ImportSettingsFailedTitle = "导入设置失败";
+        SettingsImportedTitle = "设置已导入";
+        SettingsImportedBody = "设置已导入。需要重新启动应用程序才能应用它们。现在重新启动？";
+        ResetSettingsConfirmTitle = "重置设置";
+        ResetSettingsConfirmBody = "所有设置和书签都将重置为应用程序的默认状态。此操作无法撤销。\n\n该应用程序将随后重新启动以应用它。继续？";
+        }
+        else if (language == "en")
+        {
         IsEnglish = true;
+            MenuLanguage = "Language";
+            LanguageRestartNote = "(Restart required)";
         MenuBookmark = "Bookmark";
         MenuBookmarkAdd = "Add bookmark";
         MenuBookmarkRemove = "Remove bookmark";
@@ -1126,6 +1492,7 @@ public static class Strings
         ButtonEdgeShadesTip = "Veils the top and bottom ends of a list";
         MenuViewerSideSwapped = "Swap sides";
         MenuDockOnRight = "Pin to right edge";
+        MenuAutoDock = "Auto-dock to screen edge";
         MenuAutoHideCloseOnLeave = "Close on mouse leave";
         MenuAutoHideUseHandle = "Handle instead of full edge";
         MenuAutoHideSlide = "Slide animation";
@@ -1418,6 +1785,7 @@ public static class Strings
 
         ResetSettingsConfirmTitle = "Reset settings";
         ResetSettingsConfirmBody = "All settings and bookmarks will be reset to the app's default state. This cannot be undone.\n\nThe app will restart afterward to apply it. Continue?";
+        }
 
 #if INSTRUMENT
         RootPathLabel += " (INSTRUMENTED)";
