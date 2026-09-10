@@ -73,7 +73,7 @@
             </Setter>
         </Style>
     </UserControl.Resources>
-    <Grid>
+    <Grid ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -105,14 +105,18 @@
                 Grid.Row="1"
                 Margin="8,0,8,8"
                 ClickAction="OpenBrowser"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto"
+                SizeChanged="Preview_SizeChanged"
                 Visibility="Collapsed"/>
         <avalonEdit:TextEditor x:Name="Editor"
                 Grid.Row="1"
                 Margin="8,0,8,8"
                 ShowLineNumbers="True"
+                WordWrap="True"
                 FontFamily="Consolas"
                 FontSize="13"
-                HorizontalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto"
                 Visibility="Collapsed"
                 TextChanged="Editor_TextChanged"/>
