@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -175,12 +176,57 @@ public partial class DocumentPane : System.Windows.Controls.UserControl
             Preview.Markdown = Editor.Text;
             Preview.Visibility = Visibility.Visible;
             Editor.Visibility = Visibility.Collapsed;
+            Dispatcher.BeginInvoke(FitPreviewWidth, DispatcherPriority.Loaded);
         }
         else
         {
             Preview.Visibility = Visibility.Collapsed;
             Editor.Visibility = Visibility.Visible;
         }
+    }
+
+    private void Preview_SizeChanged(object sender, SizeChangedEventArgs e)
+        => FitPreviewWidth();
+
+    private void FitPreviewWidth()
+    {
+        double width = Preview.ActualWidth;
+        if (width <= 1)
+        {
+            return;
+        }
+
+        if (Preview.Document is FlowDocument document)
+        {
+            document.PageWidth = width;
+            document.ColumnWidth = width;
+            return;
+        }
+
+        if (FindFlowDocument(Preview) is { } found)
+        {
+            found.PageWidth = width;
+            found.ColumnWidth = width;
+        }
+    }
+
+    private static FlowDocument? FindFlowDocument(DependencyObject root)
+    {
+        if (root is FlowDocumentScrollViewer { Document: { } document })
+        {
+            return document;
+        }
+
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            if (FindFlowDocument(VisualTreeHelper.GetChild(root, i)) is { } nested)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private void PreviewToggle_Click(object sender, RoutedEventArgs e)
