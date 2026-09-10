@@ -365,6 +365,11 @@ public class AppSettings
     // 1.0 / 0.0 is the full edge, which is what the app has always done.
     public double DockedHeightRatio { get; set; } = 1.0;
     public double DockedTopRatio { get; set; } = 0.0;
+
+    // When enabled, a floating window released near the left or right edge of
+    // the current monitor is docked automatically. The setting is deliberately
+    // global so every instance follows the same interaction preference.
+    public bool AutoDockEnabled { get; set; } = true;
     public double TreeFontSize { get; set; } = 12;
     // 즐겨찾기가 있던 자리. 목록은 북마크로 합쳐졌고(MergeFavoritesIntoBookmarks)
     // 이 배열은 비우지 않는다 - 합치기는 한 번뿐이라 되돌릴 길이 여기 말고 없다.
@@ -402,6 +407,14 @@ public class AppSettings
 
     public bool AutoCollapseFolders { get; set; } = false;
     public bool AlwaysOnTop { get; set; } = false;
+
+    // While docked and pinned, register as a Windows appbar so maximized
+    // windows sit beside this one instead of covering it. Off by default:
+    // the existing overlay / auto-hide behaviour stays unless asked for.
+    public bool ReserveWorkAreaWhenDocked { get; set; } = false;
+
+    // User-chosen chords. Missing key = built-in default; empty string = unbound.
+    public Dictionary<string, string> Shortcuts { get; set; } = new();
     // 슬라이드 쇼 - how long each picture is held, in seconds. The RUNNING
     // state deliberately does not live here: an app that started moving
     // pictures by itself on launch would be answering a question nobody asked
@@ -738,22 +751,35 @@ public class AppSettings
     public string LightViewerBackgroundColorHex { get; set; } = "#FFFFFFFF";
     public string LightHeaderBackgroundColorHex { get; set; } = "#FFF3F3F3";
 
-    // "ko" or "en" (see Services/Strings.cs). Restart-only - Strings.Initialize
-    // reads this once at process startup, before any window's XAML loads.
-    // Defaults to whatever DetectDefaultLanguage below resolves at the
-    // moment a brand-new AppSettings is constructed (no settings.json yet,
-    // or an unreadable one) - once saved, this sticks, so a later Windows
-    // display-language change doesn't silently flip an existing user's
-    // choice out from under them.
+    // "ko", "en", or "zh-CN" (see Services/Strings.cs). Restart-only -
+    // Strings.Initialize reads this once at process startup, before any
+    // window's XAML loads. Defaults to whatever DetectDefaultLanguage below
+    // resolves at the moment a brand-new AppSettings is constructed (no
+    // settings.json yet, or an unreadable one) - once saved, this sticks, so a
+    // later Windows display-language change doesn't silently flip an existing
+    // user's choice out from under them.
     public string Language { get; set; } = DetectDefaultLanguage();
 
-    // Korean Windows installs default to Korean; everything else (including
-    // a UI culture we don't otherwise localize for) defaults to English
-    // rather than assuming Korean.
+    // Simplified Chinese Windows installs default to Simplified Chinese; Korean
+    // installs stay Korean; everything else (including a UI culture we don't
+    // otherwise localize for) defaults to English rather than guessing wrong.
     private static string DetectDefaultLanguage()
-        => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ko", StringComparison.OrdinalIgnoreCase)
+    {
+        var cultureName = CultureInfo.CurrentUICulture.Name;
+
+        if (cultureName.Equals("zh", StringComparison.OrdinalIgnoreCase)
+            || cultureName.Equals("zh-CN", StringComparison.OrdinalIgnoreCase)
+            || cultureName.Equals("zh-Hans", StringComparison.OrdinalIgnoreCase)
+            || cultureName.StartsWith("zh-CN-", StringComparison.OrdinalIgnoreCase)
+            || cultureName.StartsWith("zh-Hans-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "zh-CN";
+        }
+
+        return CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ko", StringComparison.OrdinalIgnoreCase)
             ? "ko"
             : "en";
+    }
 
     // App-wide default sort ("정렬 기준" submenu) - see FileSystemService.
     // SortField is the live one ("name" | "date" | "type" | "size"); SortByDate

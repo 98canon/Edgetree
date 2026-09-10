@@ -1,0 +1,127 @@
+<UserControl x:Class="SidebarExplorer.App.Controls.DocumentPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:SidebarExplorer.App.Services"
+             xmlns:mdxam="clr-namespace:MdXaml;assembly=MdXaml"
+             xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
+             Background="{DynamicResource ViewerBackground}">
+    <UserControl.Resources>
+        <Style x:Key="DocChip" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundText}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ViewerChipBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FontSize" Value="{DynamicResource FooterChipFontSize}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBackground}"/>
+                                <Setter Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Opacity" Value="0.7"/>
+        </Style>
+        <Style x:Key="DocButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundText}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ViewerChipBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FontSize" Value="{DynamicResource FooterChipFontSize}"/>
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBackground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <DockPanel Grid.Row="0" Margin="8,6,8,6">
+            <Button x:Name="PopOutButton"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource DocButton}"
+                    Content="{x:Static services:Strings.DocumentPopOut}"
+                    Click="PopOutButton_Click"/>
+            <StackPanel x:Name="ModeRow" Orientation="Horizontal" DockPanel.Dock="Left">
+                <ToggleButton x:Name="PreviewToggle"
+                        Style="{StaticResource DocChip}"
+                        Content="{x:Static services:Strings.DocumentPreview}"
+                        Click="PreviewToggle_Click"/>
+                <ToggleButton x:Name="EditToggle"
+                        Style="{StaticResource DocChip}"
+                        Content="{x:Static services:Strings.DocumentEdit}"
+                        Click="EditToggle_Click"/>
+            </StackPanel>
+            <TextBlock x:Name="TitleText"
+                    Margin="10,0,8,0"
+                    VerticalAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    Foreground="{DynamicResource ForegroundText}"
+                    Opacity="0.8"/>
+        </DockPanel>
+        <mdxam:MarkdownScrollViewer x:Name="Preview"
+                Grid.Row="1"
+                Margin="8,0,8,8"
+                ClickAction="OpenBrowser"
+                Visibility="Collapsed"/>
+        <avalonEdit:TextEditor x:Name="Editor"
+                Grid.Row="1"
+                Margin="8,0,8,8"
+                ShowLineNumbers="True"
+                FontFamily="Consolas"
+                FontSize="13"
+                HorizontalScrollBarVisibility="Auto"
+                VerticalScrollBarVisibility="Auto"
+                Visibility="Collapsed"
+                TextChanged="Editor_TextChanged"/>
+        <TextBlock x:Name="MessageText"
+                Grid.Row="1"
+                Margin="16"
+                TextWrapping="Wrap"
+                Foreground="{DynamicResource ForegroundText}"
+                Opacity="0.7"
+                Visibility="Collapsed"/>
+    </Grid>
+</UserControl>

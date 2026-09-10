@@ -1,4 +1,4 @@
-# Edgetree v2.6.0
+# Edgetree v2.7.0
 
 [English](README.md)
 
@@ -8,7 +8,7 @@
 
 ## 다운로드
 
-[릴리즈 페이지](https://github.com/legendsteel11/Edgetree/releases/latest)에서 최신 버전을 받으세요. 매 릴리즈마다 파일 3개가 첨부되어 있습니다.
+[릴리즈 페이지](https://github.com/98canon/Edgetree/releases/latest)에서 최신 버전을 받으세요. 매 릴리즈마다 파일 3개가 첨부되어 있습니다.
 
 - **`Edgetree-<버전>-win-x64-setup.exe`** (약 49MB) — 설치 버전. 몇 번 클릭하면 시작 메뉴에 등록되고, 제거도 깔끔합니다.
 - **`Edgetree-<버전>-win-x64-standalone.exe`** (약 155MB) — 무설치. 파일 하나를 원하는 곳에 두고 바로 실행합니다.
@@ -244,6 +244,10 @@ dotnet publish src/Edgetree -c Release -r win-x64 --self-contained true -o publi
 csproj만 올리면 됩니다.
 
 ## 변경 이력
+
+### v2.7.0 (2026-09-10)
+
+- 이 저장소는 98canon이 유지하는 비공식 간체 중국어 커뮤니티 포크입니다. 간체 중국어 UI·도움말, 문서 미리보기·편집, 사용자 지정 바로 가기 키, 작업 영역 예약 및 관련 다중 모니터·자동 고정 개선을 추가했습니다.
 
 ### v2.6.0 (2026-09-08)
 
@@ -669,7 +673,7 @@ csproj만 올리면 됩니다.
   복사·삭제하거나 앱 밖으로 드래그
 - **아이콘 방식 선택**: 윈도우 탐색기와 동일한 아이콘 옵션 추가
 
-이전 버전의 변경 내용은 [GitHub 릴리즈](https://github.com/legendsteel11/Edgetree/releases)에서 확인할 수 있습니다.
+이전 버전의 변경 내용은 [GitHub 릴리즈](https://github.com/98canon/Edgetree/releases)에서 확인할 수 있습니다.
 
 ## 요청·버그 신고
 

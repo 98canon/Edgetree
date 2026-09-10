@@ -24,7 +24,7 @@ onMounted(ensureReleaseAssetsLoaded)
                   @click="trackDownload('setup', 'hero')">{{ t.hero.ctaDownloadSetup }}</a>
           <a class="btn btn-secondary" :href="standaloneDownloadUrl" target="_blank" rel="noopener"
                   @click="trackDownload('standalone', 'hero')">{{ t.hero.ctaDownloadPortable }}</a>
-          <a class="btn btn-secondary" href="https://github.com/legendsteel11/Edgetree" target="_blank" rel="noopener">{{ t.hero.ctaGithub }}</a>
+          <a class="btn btn-secondary" href="https://github.com/98canon/Edgetree" target="_blank" rel="noopener">{{ t.hero.ctaGithub }}</a>
         </div>
       </div>
       <div class="shot">

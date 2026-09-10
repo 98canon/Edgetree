@@ -33,8 +33,8 @@
 ; three, so the last one is trimmed back off.
 #define ExeVersion GetVersionNumbersString("..\publish\folder\" + MyAppExe)
 #define MyAppVersion Copy(ExeVersion, 1, RPos(".", ExeVersion) - 1)
-#define MyAppPublisher "Edgetree"
-#define MyAppUrl "https://github.com/legendsteel11/Edgetree"
+#define MyAppPublisher "98canon - Edgetree Chinese Community"
+#define MyAppUrl "https://github.com/98canon/Edgetree"
 
 [Setup]
 ; A fixed AppId ties upgrades and the uninstall entry together across versions - never change it.

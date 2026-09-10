@@ -54,6 +54,7 @@ public class AppPreset
         nameof(AppSettings.DockedHeightRatio),
         nameof(AppSettings.IsAutoHidden),
         nameof(AppSettings.AlwaysOnTop),
+        nameof(AppSettings.ReserveWorkAreaWhenDocked),
 
         // 창 모드와 그때의 기하 (2026-08-17). Reported as "the preset does not
         // carry 창 모드", and it was not a missing line here - there was no

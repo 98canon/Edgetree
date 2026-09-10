@@ -106,13 +106,33 @@ public partial class MainWindow : Window
     // hovering with a file. Same 400ms as the re-hide, for one thing to tune.
     private const int AutoHideDragRevealDelayMs = 400;
 
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService = new(
+        App.InstanceSlotId,
+        App.LaunchMonitorDeviceName);
     private AppSettings _settings = new();
     // Observable so a drive can leave and come back without the tree being
     // rebound - hiding a drive root removes it here and the view follows. It
     // was a plain List while the set of roots only ever changed at startup.
     private readonly System.Collections.ObjectModel.ObservableCollection<FileSystemItem> _roots = new();
     private bool _isDocked = true;
+    private readonly AppBarService _appBar = new();
+    private bool _appBarUpdating;
+    private int _suppressWorkAreaReposition;
+    private bool _fullscreenAppActive;
+    // Middle-click photo fullscreen maximizes this window, which Windows
+    // reports as ABN_FULLSCREENAPP. That pulse has no matching "off" once we
+    // unregister, so without this the reservation would stay dead until restart.
+    private bool _ignoreAppBarFullscreenPulse;
+    private bool _usePreferredMonitorForInitialDock;
+    private string? _preferredMonitorDeviceName;
+    private const int AutoDockEdgeThresholdPx = 24;
+    private const int AutoDockDwellMs = 150;
+    private enum AutoDockEdge
+    {
+        None,
+        Left,
+        Right,
+    }
 
     // Remembers the floating window's own bounds across a dock -> undock
     // round trip within the same run (null until the first time this app
@@ -174,6 +194,10 @@ public partial class MainWindow : Window
     private bool _settingsResetPending;
 
     private System.Windows.Point? _headerDragStart;
+    private bool _autoDockMoveActive;
+    private AutoDockEdge _autoDockCandidateEdge = AutoDockEdge.None;
+    private AutoDockEdge _autoDockReadyEdge = AutoDockEdge.None;
+    private System.Windows.Threading.DispatcherTimer? _autoDockTimer;
     private FileSystemItem? _selectedItem;
 
     // What the VIEWER is showing, which is no longer always what the tree has
@@ -285,6 +309,17 @@ public partial class MainWindow : Window
         SizeChanged += MainWindow_SizeChanged;
         SystemParameters.StaticPropertyChanged += SystemParameters_StaticPropertyChanged;
         SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
+        IsVisibleChanged += MainWindow_IsVisibleChanged;
+    }
+
+    private void MainWindow_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (_windowIsClosing)
+        {
+            return;
+        }
+
+        SyncWorkAreaReservation();
     }
 
     // Defensive - not a confirmed fix for any specific reported symptom, just
@@ -310,6 +345,7 @@ public partial class MainWindow : Window
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
+            RestoreWorkAreaReservationAfterForeignFullscreen();
             if (_isDocked)
             {
                 PositionToWorkArea();
@@ -362,10 +398,37 @@ public partial class MainWindow : Window
     // there is nothing to register for and nothing to unregister - the hook
     // this window already has is the whole subscription.
     private const int WM_DEVICECHANGE = 0x0219;
+    private const int WM_ACTIVATE = 0x0006;
     private const int HTCAPTION = 2;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+
+        public int Width => Right - Left;
+        public int Height => Bottom - Top;
+    }
 
     private IntPtr SingleInstanceWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == (int)_appBar.CallbackMessage)
+        {
+            HandleAppBarNotification(wParam, lParam);
+            return IntPtr.Zero;
+        }
+
+        if (msg == WM_ACTIVATE)
+        {
+            _appBar.NotifyActivated();
+        }
+
         if (msg == WM_WINDOWPOSCHANGED && (_inTopBandDrag || _inBottomBandDrag))
         {
             // Instrument only (compiles away in Release): any real geometry
@@ -409,6 +472,14 @@ public partial class MainWindow : Window
             // and it arrives long before the frame's own leave message would.
             SetMoveHint(false);
         }
+        else if (msg == WM_WINDOWPOSCHANGED)
+        {
+            UpdateAutoDockTracking();
+            if (!_appBarUpdating)
+            {
+                _appBar.NotifyWindowPosChanged();
+            }
+        }
         else if (msg == WM_ENTERSIZEMOVE)
         {
             // THE HINT STAYS THROUGH THE DRAG (2026-08-17, the author's call:
@@ -422,6 +493,8 @@ public partial class MainWindow : Window
         else if (msg == WM_EXITSIZEMOVE)
         {
             _inCaptionDrag = false;
+            StopAutoDockTimer();
+            _autoDockMoveActive = false;
             // Let go the same way an idle hover does, rather than vanishing the
             // instant the button comes up - the pointer is still on the strip.
             if (ViewerMoveHint.Visibility == Visibility.Visible)
@@ -654,6 +727,8 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object? sender, RoutedEventArgs e)
     {
         _settings = _settingsService.Load();
+        _preferredMonitorDeviceName = _settingsService.EffectiveMonitorDeviceName;
+        _usePreferredMonitorForInitialDock = !string.IsNullOrWhiteSpace(_preferredMonitorDeviceName);
         // 저장에서 들어온 자막 크기를 1080 기준으로 한 번만 옮긴다. 설정을 읽은
         // 바로 다음이 자리인 것은 이 값이 화면에 닿기 전에 끝나야 하기 때문이다.
         BaselineSubtitleFontSize();
@@ -800,6 +875,10 @@ public partial class MainWindow : Window
         ApplyHeaderMetrics();
         SetExpandedContentVisibility(_settings.IsAutoHidden ? Visibility.Collapsed : Visibility.Visible);
         PositionToWorkArea();
+        if (!_settings.IsFloating)
+        {
+            _usePreferredMonitorForInitialDock = false;
+        }
         UpdateResizeThumbVisibility();
 
         // The viewer panel survives restarts. On top of the tree-only Width
@@ -975,7 +1054,7 @@ public partial class MainWindow : Window
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Edgetree");
 
             string json = await http.GetStringAsync(
-                "https://api.github.com/repos/legendsteel11/Edgetree/releases/latest");
+                "https://api.github.com/repos/98canon/Edgetree/releases/latest");
 
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             if (doc.RootElement.TryGetProperty("tag_name", out var tagElement) is false ||
@@ -1768,6 +1847,33 @@ public partial class MainWindow : Window
         }
     }
 
+    // AvalonEdit is not a TextBoxBase, so the old "not a text box" guard
+    // still stole Backspace/Space/Ctrl+arrows from the document editor.
+    private static bool IsEditingText()
+    {
+        var focused = Keyboard.FocusedElement;
+        if (focused is System.Windows.Controls.Primitives.TextBoxBase)
+        {
+            return true;
+        }
+
+        DependencyObject? node = focused as DependencyObject;
+        while (node is not null)
+        {
+            if (node is ICSharpCode.AvalonEdit.TextEditor
+                or ICSharpCode.AvalonEdit.Editing.TextArea)
+            {
+                return true;
+            }
+
+            node = node is Visual visual
+                ? VisualTreeHelper.GetParent(visual)
+                : LogicalTreeHelper.GetParent(node);
+        }
+
+        return false;
+    }
+
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         // Esc leaves the viewer's full cover. Middle-clicking again does too,
@@ -1775,7 +1881,7 @@ public partial class MainWindow : Window
         // and Esc is what a hand reaches for. Narrow enough not to disturb the
         // tree's own Esc (which calls off a multi-selection or a pending cut).
         if (_viewerFullscreen && e.Key == Key.Escape &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             SetViewerFullscreen(false);
             e.Handled = true;
@@ -1798,9 +1904,8 @@ public partial class MainWindow : Window
         // somewhere nobody asked for. Esc first, then this.
         if (_viewerOpen &&
             !_viewerFullscreen &&
-            Keyboard.Modifiers == ModifierKeys.None &&
-            e.Key == Key.Back &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            ShortcutService.Matches(_settings, ShortcutService.ClosePanel, e) &&
+            !IsEditingText())
         {
             CloseViewer();
             e.Handled = true;
@@ -1827,9 +1932,8 @@ public partial class MainWindow : Window
         // Shift+Backspace is an ORDINARY EDITING KEY inside a text box, so
         // without it renaming a row or typing in the path bar would fold the
         // tree instead of deleting a character.
-        if (e.Key == Key.Back &&
-            Keyboard.Modifiers == ModifierKeys.Shift &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+        if (ShortcutService.Matches(_settings, ShortcutService.CollapseAll, e) &&
+            !IsEditingText())
         {
             CollapseEverything();
             e.Handled = true;
@@ -1855,7 +1959,7 @@ public partial class MainWindow : Window
             HasSubtitles &&
             (Keyboard.Modifiers & ~ModifierKeys.Shift) == ModifierKeys.None &&
             e.Key is Key.OemComma or Key.OemPeriod &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             StepSubtitleOffset(e.Key == Key.OemComma ? -SubtitleOffsetStep : SubtitleOffsetStep);
             e.Handled = true;
@@ -1881,7 +1985,7 @@ public partial class MainWindow : Window
             ViewerImage.Source is not null &&
             Keyboard.Modifiers == ModifierKeys.None &&
             e.Key is Key.Enter or Key.Return &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             SetViewerFullscreen(!_viewerFullscreen);
             e.Handled = true;
@@ -1901,7 +2005,8 @@ public partial class MainWindow : Window
             _viewerOpen &&
             e.Key == Key.Space &&
             _viewerVideoPath is not null &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            DocumentPane.Visibility != Visibility.Visible &&
+            !IsEditingText())
         {
             ViewerMediaPlayPause_Click(this, new RoutedEventArgs());
             e.Handled = true;
@@ -1918,8 +2023,9 @@ public partial class MainWindow : Window
             _viewerOpen &&
             e.Key == Key.Space &&
             _viewerVideoPath is null &&
+            DocumentPane.Visibility != Visibility.Visible &&
             _pendingViewerPath is { } playable && IsViewerPlayable(playable) &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             ViewerPlayOverlay_Click(this, new RoutedEventArgs());
             e.Handled = true;
@@ -1936,22 +2042,37 @@ public partial class MainWindow : Window
         // it would break renaming and the path bar. Out of the SEARCH VIEW for
         // the same reason the two buttons grey out there: the tree it moves is
         // behind the results.
-        if (Keyboard.Modifiers == ModifierKeys.Control &&
-            (e.Key == Key.Left || e.Key == Key.Right) &&
-            !_isSearchViewActive &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+        if (!_isSearchViewActive && !IsEditingText())
         {
-            GoTreeHistory(e.Key == Key.Left ? -1 : +1);
-            e.Handled = true;
-            return;
+            if (ShortcutService.Matches(_settings, ShortcutService.HistoryBack, e))
+            {
+                GoTreeHistory(-1);
+                e.Handled = true;
+                return;
+            }
+
+            if (ShortcutService.Matches(_settings, ShortcutService.HistoryForward, e))
+            {
+                GoTreeHistory(+1);
+                e.Handled = true;
+                return;
+            }
         }
 
         // F1 from anywhere, including out of a text box: it is the one key on a
         // keyboard that means the same thing in every program, and someone
         // reaching for it is by definition unsure where they are.
-        if (e.Key == Key.F1 && Keyboard.Modifiers == ModifierKeys.None)
+        if (ShortcutService.Matches(_settings, ShortcutService.Help, e))
         {
             ShowHelpWindow();
+            e.Handled = true;
+            return;
+        }
+
+        if (ShortcutService.Matches(_settings, ShortcutService.Search, e) &&
+            !IsEditingText())
+        {
+            SetSearchViewActive(true);
             e.Handled = true;
             return;
         }
@@ -1966,9 +2087,10 @@ public partial class MainWindow : Window
         // mysterious in a window with no pictures in it. StartSlideshow does
         // the rest of the deciding - a folder with nothing to walk simply does
         // not start, the same as the menu row.
-        if (e.Key == Key.F8 && Keyboard.Modifiers == ModifierKeys.None &&
+        if (ShortcutService.Matches(_settings, ShortcutService.Slideshow, e) &&
             _viewerOpen &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            DocumentPane.Visibility != Visibility.Visible &&
+            !IsEditingText())
         {
             if (IsSlideshowRunning)
             {
@@ -2012,8 +2134,8 @@ public partial class MainWindow : Window
         // With no preset active there is nothing to write back, so it falls
         // through to 프리셋 추가 - a save key that saves nothing is a broken
         // key, and naming a new slot is the only thing left for it to mean.
-        if (e.Key == Key.S && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+        if (ShortcutService.Matches(_settings, ShortcutService.SavePreset, e) &&
+            !IsEditingText())
         {
             SaveActivePreset();
             e.Handled = true;
@@ -2037,7 +2159,7 @@ public partial class MainWindow : Window
         // the alternative is a press that appears to fail.
         if (Keyboard.Modifiers == ModifierKeys.Control &&
             PresetSlotForKey(e.Key) is { } slot &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             GoToPresetSlot(slot);
             e.Handled = true;
@@ -2052,9 +2174,9 @@ public partial class MainWindow : Window
         //
         // Same gate as F8: dead with the panel shut, so it is never a key that
         // silently does nothing in a window with no picture in it.
-        if (e.Key == Key.F9 && Keyboard.Modifiers == ModifierKeys.None &&
+        if (ShortcutService.Matches(_settings, ShortcutService.Clock, e) &&
             _viewerOpen &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             SetViewerClock(!_settings.ViewerClock);
             e.Handled = true;
@@ -2076,7 +2198,7 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers == ModifierKeys.None &&
             _viewerOpen &&
             _viewerVideoPath is not null &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             if (e.Key == Key.Home)
             {
@@ -2093,10 +2215,10 @@ public partial class MainWindow : Window
             }
         }
 
-        if (Keyboard.Modifiers == ModifierKeys.None &&
+        if (ShortcutService.Matches(_settings, ShortcutService.NextItem, e) &&
             _viewerOpen &&
-            e.Key == Key.Space &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            DocumentPane.Visibility != Visibility.Visible &&
+            !IsEditingText())
         {
             // Moves the SELECTION, not the focus. Asking focus to travel down
             // was the original implementation and it only worked while the
@@ -2124,7 +2246,7 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers == ModifierKeys.None &&
             _viewerOpen &&
             (e.Key == Key.Left || e.Key == Key.Right) &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             // ViewerMediaIsSelection, not "something is loaded": music left
             // running in another folder must not take the arrow keys away from
@@ -2164,7 +2286,7 @@ public partial class MainWindow : Window
             ViewerMediaIsSelection &&
             _viewerVideoPlaying &&
             e.Key == Key.M &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             SetViewerMediaMuted(!_viewerMediaMuted);
             e.Handled = true;
@@ -2195,7 +2317,7 @@ public partial class MainWindow : Window
             _viewerOpen &&
             ViewerMediaIsSelection &&
             (e.Key == Key.Up || e.Key == Key.Down) &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             if (_viewerVideoPlaying)
             {
@@ -2256,7 +2378,7 @@ public partial class MainWindow : Window
             _viewerListOverride is null &&
             ViewerFilmstripHost.Visibility == Visibility.Visible &&
             (e.Key == Key.Up || e.Key == Key.Down) &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase &&
+            !IsEditingText() &&
             ViewerItem is { } gridRow && IsViewerCarouselItem(gridRow))
         {
             // CLAMPED, unlike a chevron. A step of one either exists or it does
@@ -2280,7 +2402,7 @@ public partial class MainWindow : Window
             _viewerOpen &&
             ViewerFilmstripHost.Visibility == Visibility.Visible &&
             _filmstripCells.Count > 0 &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             FilmstripSelectAll_Click(sender, e);
             e.Handled = true;
@@ -2295,7 +2417,7 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers == ModifierKeys.None &&
             _viewerOpen &&
             _viewerPixelWidth > 0 &&
-            Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+            !IsEditingText())
         {
             switch (e.Key)
             {
@@ -2355,10 +2477,6 @@ public partial class MainWindow : Window
             // on the key. Pressing it while the keyboard is already in the
             // results still pulls focus back to the box, which a toggle would
             // have spent.
-            case Key.F:
-                SetSearchViewActive(true);
-                e.Handled = true;
-                break;
             case Key.E:
                 SetSearchViewActive(false);
                 e.Handled = true;
@@ -2466,6 +2584,9 @@ public partial class MainWindow : Window
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _windowIsClosing = true;
+        DocumentPane.Unload();
+        _documentWindow?.Close();
+        _appBar.Dispose();
 
         // EVERY GRACEFUL EXIT REACHES HERE, which is what makes the save below
         // the one place the session's state is persisted from. The header's X is
@@ -2570,7 +2691,8 @@ public partial class MainWindow : Window
     {
         // Only re-snap to the work area while docked - a floating window must not
         // get yanked back to the left edge just because the taskbar moved/resized.
-        if (e.PropertyName == nameof(SystemParameters.WorkArea) && _isDocked)
+        if (e.PropertyName == nameof(SystemParameters.WorkArea) && _isDocked
+            && !_appBarUpdating && _suppressWorkAreaReposition == 0)
         {
             // Wrapped in a lambda rather than passed as a method group, which
             // crashed the app outright ("Parameter count mismatch") the moment a
@@ -2613,6 +2735,7 @@ public partial class MainWindow : Window
             // 작업 영역의 분수라서 모니터가 바뀌면 이 상태에서도 낡는다. 이 함수가
             // 그 변화를 전부 받는다는 것이 그 줄이 여기 있는 이유였다.
             ApplyMenuMaxHeight();
+            SyncWorkAreaReservation();
             return;
         }
 
@@ -2682,7 +2805,7 @@ public partial class MainWindow : Window
 
         if (!keepLeft)
         {
-            Left = _settings.DockOnRight ? workArea.Right - Width : workArea.Left;
+            Left = DockedLeft(workArea, Width);
         }
 
         // Rides along here for the same reason the handle's own geometry does:
@@ -2695,6 +2818,7 @@ public partial class MainWindow : Window
         // moment the window lands on a different monitor, the taskbar resizes,
         // or the DPI changes - all of which come through here.
         ApplyMenuMaxHeight();
+        SyncWorkAreaReservation();
     }
 
     // Work area (excludes the taskbar) of whichever monitor this window's
@@ -2711,10 +2835,28 @@ public partial class MainWindow : Window
     // only ever asked about the monitor the window is already sitting on
     // (Dock() calls this before moving the window anywhere), so there's no
     // cross-monitor DPI mismatch to resolve.
+    private string? GetCurrentMonitorDeviceName()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        return System.Windows.Forms.Screen.FromHandle(hwnd)?.DeviceName;
+    }
+
     private Rect GetCurrentMonitorWorkArea(DpiScale? dpiScale = null)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
-        var screen = hwnd != IntPtr.Zero
+        System.Windows.Forms.Screen? screen = null;
+        if (_usePreferredMonitorForInitialDock && !string.IsNullOrWhiteSpace(_preferredMonitorDeviceName))
+        {
+            screen = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(candidate =>
+                string.Equals(candidate.DeviceName, _preferredMonitorDeviceName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        screen ??= hwnd != IntPtr.Zero
             ? System.Windows.Forms.Screen.FromHandle(hwnd)
             : System.Windows.Forms.Screen.PrimaryScreen;
         if (screen is null)
@@ -2726,6 +2868,16 @@ public partial class MainWindow : Window
         // can still return the scale being left behind.
         var dpi = dpiScale ?? VisualTreeHelper.GetDpi(this);
         var working = screen.WorkingArea;
+        // After we register as an appbar, WorkingArea already excludes this
+        // window. Layout that docks to WorkingArea would then sit in the
+        // leftover region and shrink itself. Put our own strip back so the
+        // dock target stays the edge we actually occupy.
+        if (_appBar.IsRegistered && !_appBar.LastReservedPx.IsEmpty
+            && screen.Bounds.IntersectsWith(_appBar.LastReservedPx))
+        {
+            working = System.Drawing.Rectangle.Union(working, _appBar.LastReservedPx);
+        }
+
         var area = new Rect(
             working.Left / dpi.DpiScaleX,
             working.Top / dpi.DpiScaleY,
@@ -2774,6 +2926,311 @@ public partial class MainWindow : Window
             ABE_TOP => new Rect(area.Left, area.Top + TaskbarRevealStrip, area.Width, area.Height - TaskbarRevealStrip),
             _ => area,
         };
+    }
+
+    private bool ShouldReserveWorkArea =>
+        _settings.ReserveWorkAreaWhenDocked
+        && _isDocked
+        && !_settings.IsAutoHidden
+        && !IsDockedFullscreen
+        && !_windowIsClosing
+        && !_fullscreenAppActive
+        && IsVisible;
+
+    private void HandleAppBarNotification(IntPtr wParam, IntPtr lParam)
+    {
+        switch (wParam.ToInt32())
+        {
+            case NativeMethods.ABN_POSCHANGED:
+                if (_isDocked && !_appBarUpdating)
+                {
+                    Dispatcher.BeginInvoke(() => PositionToWorkArea());
+                }
+                break;
+            case NativeMethods.ABN_FULLSCREENAPP:
+                // Our own photo/video fullscreen is not "another app took the
+                // screen". Honouring it dropped the reservation and, because we
+                // unregister, the matching off-message never arrived.
+                if (_ignoreAppBarFullscreenPulse || IsDockedFullscreen)
+                {
+                    return;
+                }
+
+                bool fullscreen = lParam != IntPtr.Zero;
+                if (_fullscreenAppActive == fullscreen)
+                {
+                    return;
+                }
+
+                _fullscreenAppActive = fullscreen;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (_isDocked)
+                    {
+                        PositionToWorkArea();
+                    }
+                    else
+                    {
+                        SyncWorkAreaReservation();
+                    }
+                });
+                break;
+        }
+    }
+
+    // Tell Windows this strip is occupied (or give it back). Called after
+    // every docked geometry write so maximized windows track the width live.
+    private void SyncWorkAreaReservation()
+    {
+        if (_appBarUpdating)
+        {
+            return;
+        }
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (!ShouldReserveWorkArea || hwnd == IntPtr.Zero)
+        {
+            _appBar.Unregister();
+            return;
+        }
+
+        if (!_appBar.Register(hwnd))
+        {
+            return;
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var work = GetCurrentMonitorWorkArea(dpi);
+        int widthPx = Math.Max(1, (int)Math.Round(Width * dpi.DpiScaleX));
+        int topPx = (int)Math.Round(work.Top * dpi.DpiScaleY);
+        int bottomPx = (int)Math.Round(work.Bottom * dpi.DpiScaleY);
+        uint edge;
+        int leftPx;
+        int rightPx;
+        if (_settings.DockOnRight)
+        {
+            edge = NativeMethods.ABE_RIGHT;
+            rightPx = (int)Math.Round(work.Right * dpi.DpiScaleX);
+            leftPx = rightPx - widthPx;
+        }
+        else
+        {
+            edge = NativeMethods.ABE_LEFT;
+            leftPx = (int)Math.Round(work.Left * dpi.DpiScaleX);
+            rightPx = leftPx + widthPx;
+        }
+
+        _appBarUpdating = true;
+        _suppressWorkAreaReposition++;
+        try
+        {
+            var reserved = _appBar.SetPos(edge, leftPx, topPx, rightPx, bottomPx);
+            if (reserved.IsEmpty || reserved.Width <= 0 || reserved.Height <= 0)
+            {
+                _appBar.Unregister();
+                return;
+            }
+
+            GetWindowRect(hwnd, out var current);
+            if (current.Left != reserved.Left || current.Top != reserved.Top
+                || current.Width != reserved.Width || current.Height != reserved.Height)
+            {
+                NativeMethods.MoveAndResize(
+                    hwnd, reserved.Left, reserved.Top, reserved.Width, reserved.Height);
+            }
+        }
+        finally
+        {
+            _appBarUpdating = false;
+            Dispatcher.BeginInvoke(
+                () => _suppressWorkAreaReposition = Math.Max(0, _suppressWorkAreaReposition - 1),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+    }
+
+    private bool IsAutoDockEnabled()
+        => _settings.AutoDockEnabled;
+
+    private bool CanAutoDock => IsAutoDockEnabled() && !_windowIsClosing && !_isDocked && !_settings.IsAutoHidden && !_viewerFullscreen && WindowState == WindowState.Normal;
+
+    private void BeginAutoDockMoveTracking()
+    {
+        _autoDockMoveActive = CanAutoDock;
+        _autoDockCandidateEdge = AutoDockEdge.None;
+        _autoDockReadyEdge = AutoDockEdge.None;
+        StopAutoDockTimer();
+    }
+
+    private void EndAutoDockMoveTracking(bool commit)
+    {
+        bool canCommit = commit && CanAutoDock;
+        _autoDockMoveActive = false;
+        StopAutoDockTimer();
+
+        if (canCommit)
+        {
+            TryAutoDockFromCurrentPosition();
+        }
+
+        _autoDockCandidateEdge = AutoDockEdge.None;
+        _autoDockReadyEdge = AutoDockEdge.None;
+    }
+
+    private void UpdateAutoDockTracking()
+    {
+        if (!CanAutoDock || !_autoDockMoveActive)
+        {
+            StopAutoDockTimer();
+            _autoDockCandidateEdge = AutoDockEdge.None;
+            _autoDockReadyEdge = AutoDockEdge.None;
+            return;
+        }
+
+        var edge = GetAutoDockEdge();
+        if (edge == AutoDockEdge.None)
+        {
+            StopAutoDockTimer();
+            _autoDockCandidateEdge = AutoDockEdge.None;
+            _autoDockReadyEdge = AutoDockEdge.None;
+            return;
+        }
+
+        if (_autoDockCandidateEdge != edge)
+        {
+            _autoDockCandidateEdge = edge;
+            _autoDockReadyEdge = AutoDockEdge.None;
+            StartAutoDockTimer();
+        }
+    }
+
+    private void StartAutoDockTimer()
+    {
+        _autoDockTimer ??= new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(AutoDockDwellMs)
+        };
+        _autoDockTimer.Tick -= AutoDockTimer_Tick;
+        _autoDockTimer.Tick += AutoDockTimer_Tick;
+        _autoDockTimer.Start();
+    }
+
+    private void StopAutoDockTimer()
+    {
+        _autoDockTimer?.Stop();
+    }
+
+    private void AutoDockTimer_Tick(object? sender, EventArgs e)
+    {
+        StopAutoDockTimer();
+
+        if (!CanAutoDock || !_autoDockMoveActive)
+        {
+            return;
+        }
+
+        var edge = GetAutoDockEdge();
+        if (edge != AutoDockEdge.None && edge == _autoDockCandidateEdge)
+        {
+            _autoDockReadyEdge = edge;
+        }
+    }
+
+    private void TryAutoDockFromCurrentPosition()
+    {
+        if (!CanAutoDock)
+        {
+            return;
+        }
+
+        var edge = GetAutoDockEdge();
+        if (edge == AutoDockEdge.None)
+        {
+            edge = _autoDockReadyEdge;
+        }
+
+        if (edge == AutoDockEdge.None)
+        {
+            return;
+        }
+
+        _settings.DockOnRight = edge == AutoDockEdge.Right;
+        Dock();
+    }
+
+    private AutoDockEdge GetAutoDockEdge()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return AutoDockEdge.None;
+        }
+
+        var screen = GetAutoDockScreen();
+        if (screen is null)
+        {
+            return AutoDockEdge.None;
+        }
+
+        if (!GetWindowRect(hwnd, out var windowRect))
+        {
+            return AutoDockEdge.None;
+        }
+
+        var workArea = screen.WorkingArea;
+        if (windowRect.Bottom <= workArea.Top || windowRect.Top >= workArea.Bottom)
+        {
+            return AutoDockEdge.None;
+        }
+
+        int leftDistance = Math.Abs(windowRect.Left - workArea.Left);
+        int rightDistance = Math.Abs(workArea.Right - windowRect.Right);
+        bool leftNear = leftDistance <= AutoDockEdgeThresholdPx;
+        bool rightNear = rightDistance <= AutoDockEdgeThresholdPx;
+
+        if (leftNear && rightNear)
+        {
+            return leftDistance <= rightDistance ? AutoDockEdge.Left : AutoDockEdge.Right;
+        }
+
+        if (leftNear)
+        {
+            return AutoDockEdge.Left;
+        }
+
+        if (rightNear)
+        {
+            return AutoDockEdge.Right;
+        }
+
+        return AutoDockEdge.None;
+    }
+
+    private System.Windows.Forms.Screen? GetAutoDockScreen()
+    {
+        var cursor = System.Windows.Forms.Cursor.Position;
+        double virtualLeft = SystemParameters.VirtualScreenLeft;
+        double virtualTop = SystemParameters.VirtualScreenTop;
+        double virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        double virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        bool cursorOnVirtualScreen =
+            cursor.X >= virtualLeft && cursor.X <= virtualRight &&
+            cursor.Y >= virtualTop && cursor.Y <= virtualBottom;
+
+        if (cursorOnVirtualScreen)
+        {
+            return System.Windows.Forms.Screen.FromPoint(cursor);
+        }
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out var windowRect))
+        {
+            var center = new System.Drawing.Point(
+                windowRect.Left + (windowRect.Width / 2),
+                windowRect.Top + (windowRect.Height / 2));
+            return System.Windows.Forms.Screen.FromPoint(center);
+        }
+
+        return System.Windows.Forms.Screen.PrimaryScreen;
     }
 
     private static double ClampExpandedWidth(double width)
@@ -2913,6 +3370,22 @@ public partial class MainWindow : Window
         }
 
         return false;
+    }
+
+    // When the hidden sliver sits on the join between two monitors, the
+    // cursor crosses onto the other display instead of resting on those few
+    // pixels. Pull the sliver a little into THIS monitor so it can be hit.
+    private const double JunctionRevealInset = 8;
+
+    private double DockedLeft(Rect workArea, double width)
+    {
+        bool inset = IsCollapsedToEdge && HasScreenBeyondDockedEdge();
+        if (_settings.DockOnRight)
+        {
+            return workArea.Right - width - (inset ? JunctionRevealInset : 0);
+        }
+
+        return workArea.Left + (inset ? JunctionRevealInset : 0);
     }
 
     // The window's parked position: one full width beyond the docked edge.
@@ -3132,8 +3605,14 @@ public partial class MainWindow : Window
     // the floating width and - on a session's first float - the whole window
     // shape, which is a lot of state to churn for a round trip the user thinks
     // of as one press.
+    // Only while this window is actually covering the desktop. Viewer
+    // fullscreen that stays inside the docked strip (or a restart that
+    // restores the mode without maximizing) must not drop the reservation.
     private bool IsDockedFullscreen =>
-        _isDocked && _viewerFullscreen && _settings.ViewerFullscreenFillsDesktop;
+        _isDocked
+        && _viewerFullscreen
+        && _settings.ViewerFullscreenFillsDesktop
+        && WindowState == WindowState.Maximized;
 
     // What "the window is up" means to everything OUTSIDE this window - the
     // tray icon's menu row and its click handler, both of which used to read
@@ -3229,6 +3708,14 @@ public partial class MainWindow : Window
     // of the LEFTOVER space, so no pair of values can put the band off screen.
     private (double Top, double Height) DockedBand(Rect workArea)
     {
+        // An appbar's work-area inset is a full-height rectangle. A short
+        // band would leave empty space that maximized windows still cannot
+        // use, so reservation always occupies the whole edge.
+        if (ShouldReserveWorkArea)
+        {
+            return (workArea.Top, workArea.Height);
+        }
+
         double height = Math.Clamp(
             workArea.Height * Math.Clamp(_settings.DockedHeightRatio, 0, 1),
             Math.Min(MinDockedHeight, workArea.Height),
@@ -3381,6 +3868,9 @@ public partial class MainWindow : Window
         // place to look (the fold was one CloseViewer() call right here).
 
         _settings.IsAutoHidden = true;
+        // Release the work area before the slide so other windows expand
+        // instead of sitting beside an empty strip.
+        SyncWorkAreaReservation();
         StopHoverReveal();
 
         // After IsAutoHidden is set, never before - PositionToWorkArea reads it
@@ -3502,6 +3992,10 @@ public partial class MainWindow : Window
         // else calls this - or dragging to resize would silently do nothing
         // despite the window now being back to a normal, resizable state.
         UpdateResizeThumbVisibility();
+        if (_isDocked && _settings.ReserveWorkAreaWhenDocked)
+        {
+            PositionToWorkArea();
+        }
     }
 
     private void MainWindow_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -4101,7 +4595,7 @@ public partial class MainWindow : Window
         double top = _settings.AutoHideUseHandle
             ? bandTop + ((bandHeight - height) / 2)
             : bandTop;
-        double left = _settings.DockOnRight ? workArea.Right - width : workArea.Left;
+        double left = DockedLeft(workArea, width);
 
         var cursor = System.Windows.Forms.Cursor.Position;
         var dpi = VisualTreeHelper.GetDpi(this);
@@ -4129,7 +4623,7 @@ public partial class MainWindow : Window
         }
 
         var workArea = GetCurrentMonitorWorkArea();
-        double expected = _settings.DockOnRight ? workArea.Right - Width : workArea.Left;
+        double expected = DockedLeft(workArea, Width);
         if (Math.Abs(Left - expected) < 1)
         {
             return;
@@ -4737,10 +5231,13 @@ public partial class MainWindow : Window
         // worth resizing. Floating gets the OS frame back and TopResizeStrip
         // hands it the top edge (see its own note), so these must be gone by
         // then or the two would fight over the same six pixels.
-        TopResizeThumb.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        TopResizeThumb.IsHitTestVisible = show;
-        BottomResizeThumb.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        BottomResizeThumb.IsHitTestVisible = show;
+        // Reservation occupies the full edge, so the height grips would appear
+        // to do nothing until the option is turned off.
+        bool showVertical = show && !ShouldReserveWorkArea;
+        TopResizeThumb.Visibility = showVertical ? Visibility.Visible : Visibility.Collapsed;
+        TopResizeThumb.IsHitTestVisible = showVertical;
+        BottomResizeThumb.Visibility = showVertical ? Visibility.Visible : Visibility.Collapsed;
+        BottomResizeThumb.IsHitTestVisible = showVertical;
 
         // Right-docked, the window grows toward the left (see
         // ResizeThumb_DragDelta), so the grab handle needs to be on the left
@@ -5059,7 +5556,17 @@ public partial class MainWindow : Window
 
         // Hands the rest of this same mouse gesture off to the native move loop,
         // so the window keeps following the cursor exactly like a title-bar drag.
-        DragMove();
+        BeginAutoDockMoveTracking();
+        bool dragCompleted = false;
+        try
+        {
+            DragMove();
+            dragCompleted = true;
+        }
+        finally
+        {
+            EndAutoDockMoveTracking(dragCompleted);
+        }
     }
 
     private void HeaderGrid_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -5155,7 +5662,17 @@ public partial class MainWindow : Window
 
         // 같은 손짓 그대로 Windows의 이동 루프에 넘긴다. 여기까지 오면 창은 이미
         // 창 모드라, 도킹된 창을 옮기는 일은 일어나지 않는다.
-        DragMove();
+        BeginAutoDockMoveTracking();
+        bool dragCompleted = false;
+        try
+        {
+            DragMove();
+            dragCompleted = true;
+        }
+        finally
+        {
+            EndAutoDockMoveTracking(dragCompleted);
+        }
     }
 
     private void FullscreenUndockStrip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -5233,6 +5750,7 @@ public partial class MainWindow : Window
         // reconcile the columns to whatever window comes out, with the
         // remembered panel width intact.
         _isDocked = false;
+        SyncWorkAreaReservation();
 
         // Aero-snap (dragging the header to the screen edge, or Win+Up) can
         // still maximize this window even with no OS titlebar, since
@@ -8903,6 +9421,7 @@ public partial class MainWindow : Window
             // exact shape of the v1.3.4/v1.4.0 menu breakages.
             if (FindMenuItem(generalSettings, "alwaysOnTop") is { } alwaysOnTop &&
                 FindMenuItem(generalSettings, "dockOnRight") is { } dockOnRight &&
+                FindMenuItem(generalSettings, "autoDock") is { } autoDock &&
                 FindMenuItem(generalSettings, "startWithWindows") is { } startWithWindows &&
                 FindMenuItem(generalSettings, "trayIcon") is { } trayIcon &&
                 FindMenuItem(generalSettings, "showFolderIcons") is { } showFolderIcons &&
@@ -8926,6 +9445,7 @@ public partial class MainWindow : Window
             {
                 alwaysOnTop.IsChecked = _settings.AlwaysOnTop;
                 dockOnRight.IsChecked = _settings.DockOnRight;
+                autoDock.IsChecked = _settings.AutoDockEnabled;
                 startWithWindows.IsChecked = _settings.StartWithWindows;
                 trayIcon.IsChecked = _settings.AlwaysShowTrayIcon;
                 showFolderIcons.IsChecked = _settings.ShowFolderIcons;
@@ -8945,6 +9465,11 @@ public partial class MainWindow : Window
             else
             {
                 LogClickLine("options menu: a 기본 설정 row is missing");
+            }
+
+            if (FindMenuItem(generalSettings, "reserveWorkArea") is { } reserveWorkArea)
+            {
+                reserveWorkArea.IsChecked = _settings.ReserveWorkAreaWhenDocked;
             }
 
             if (FindMenuItem(sidePanel, "sidePanelShow") is { } panelShow &&
@@ -9019,7 +9544,8 @@ public partial class MainWindow : Window
             // it read `[_, MenuItem, MenuItem]` for 언어 - a pattern that also
             // had to know the restart note leads the list, so the note and the
             // reader were two places holding one fact.
-            SetMenuItemChecked(languageMenu, "ko", _settings.Language != "en");
+            SetMenuItemChecked(languageMenu, "ko", _settings.Language == "ko");
+            SetMenuItemChecked(languageMenu, "zh-CN", _settings.Language == "zh-CN");
             SetMenuItemChecked(languageMenu, "en", _settings.Language == "en");
 
             SetMenuItemChecked(iconStyleMenu, "default", !_settings.UseShellIcons);
@@ -10992,6 +11518,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private void AutoDockMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem)
+        {
+            _settings.AutoDockEnabled = menuItem.IsChecked;
+            _settingsService.Save(_settings);
+        }
+    }
+
     private void StartWithWindowsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is MenuItem menuItem)
@@ -12725,6 +13260,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ReserveWorkAreaMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem)
+        {
+            _settings.ReserveWorkAreaWhenDocked = menuItem.IsChecked;
+            _settingsService.Save(_settings);
+            UpdateResizeThumbVisibility();
+            if (_isDocked)
+            {
+                PositionToWorkArea();
+            }
+            else
+            {
+                SyncWorkAreaReservation();
+            }
+        }
+    }
+
     // Applied live, unlike the thickness stepper next to it: this one changes
     // where the reveal target IS, and someone who just turned it on needs to
     // see where their handle went. The menu is open over the revealed sidebar
@@ -13892,6 +14445,14 @@ public partial class MainWindow : Window
         double cap = Math.Max(240.0, workAreaHeight * 0.9 - chrome);
         Application.Current.Resources["MenuMaxHeight"] = cap;
         LogScrollLine($"menu   cap {cap:F0}  (work area {workAreaHeight:F0}, chrome {chrome:F0})");
+    }
+
+    private void ShortcutsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new ShortcutSettingsWindow(_settings) { Owner = this };
+        PositionNearOptionsButton(window);
+        window.ShowDialog();
+        _settingsService.Save(_settings);
     }
 
     private void ColorSettingsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -17064,7 +17625,7 @@ public partial class MainWindow : Window
         dateText.Text = string.Empty;
 
         bool show = filePath is not null &&
-            HasViewerPreview(filePath) &&
+            HasMediaPreview(filePath) &&
             File.Exists(filePath);
 
         thumbnailItem.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
@@ -20740,6 +21301,7 @@ public partial class MainWindow : Window
         base.OnActivated(e);
         _lastActivatedTicks = Environment.TickCount64;
         UpdateSelectionBrushForActivation();
+        RestoreWorkAreaReservationAfterForeignFullscreen();
 
         // Both halves of the claim, re-checked at the one moment the marks are
         // about to be looked at again. The listener alone wasn't enough: an app
@@ -21885,10 +22447,12 @@ public partial class MainWindow : Window
             // after this fix: a window whose origin moves shows any late frame
             // displaced by the delta, and that one is framework-deep.
             SetDockedRightGeometry(newWidth);
+            SyncWorkAreaReservation();
             return;
         }
 
         Width = newWidth;
+        SyncWorkAreaReservation();
     }
 
     // The right edge is the anchor, so it is what the arithmetic holds fixed -
@@ -22176,6 +22740,7 @@ public partial class MainWindow : Window
 
         AdoptStoredFloatingBounds();
         Undock(offsetFromCorner: true);
+        _usePreferredMonitorForInitialDock = false;
     }
 
     // ----- 저장에서 들어온 창 기하를 지금 화면에 맞추기 ------------------------
@@ -22238,6 +22803,7 @@ public partial class MainWindow : Window
     // 마지막으로 알던 값을 그대로 둔다.
     private void StoreFloatingState()
     {
+        _settingsService.SetCurrentMonitorDeviceName(GetCurrentMonitorDeviceName());
         _settings.IsFloating = !_isDocked;
 
         // FILTERED ON THE WAY IN, because these four are the only numbers in
@@ -22292,6 +22858,7 @@ public partial class MainWindow : Window
     // the reveal slide and the band clip never meet a widened window.
 
     private bool _viewerOpen;
+    private DocumentViewerWindow? _documentWindow;
     private bool _viewerOnLeft;
 
     // WHICH SIDE OF THE TREE THE PANEL TAKES. Left alone the panel takes the
@@ -22479,6 +23046,68 @@ public partial class MainWindow : Window
 
     private void ViewerExpandButton_Click(object sender, RoutedEventArgs e) => OpenViewer();
 
+    private void ShowDocumentInPanel(string path)
+    {
+        _viewerShowingDecodedImage = false;
+        DocumentPane.ShowPopOut = true;
+        DocumentPane.Visibility = Visibility.Visible;
+        DocumentPane.Load(path);
+    }
+
+    private void HideDocumentViewer()
+    {
+        DocumentPane.Unload();
+        DocumentPane.Visibility = Visibility.Collapsed;
+    }
+
+    private void DocumentPane_PopOutRequested(object? sender, EventArgs e)
+    {
+        if (DocumentPane.CurrentPath is { } path)
+        {
+            OpenDocumentWindow(path);
+        }
+    }
+
+    private void OpenDocumentWindow(string path)
+    {
+        if (_documentWindow is null || !_documentWindow.IsVisible)
+        {
+            _documentWindow = new DocumentViewerWindow { Owner = this };
+            _documentWindow.TabActivated += DocumentWindow_TabActivated;
+            _documentWindow.Closed += DocumentWindow_Closed;
+            _documentWindow.WindowState = WindowState.Maximized;
+            _documentWindow.Show();
+        }
+
+        _documentWindow.FollowPath(path);
+        _documentWindow.Activate();
+    }
+
+    private void DocumentWindow_Closed(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, _documentWindow))
+        {
+            _documentWindow = null;
+        }
+    }
+
+    private void DocumentWindow_TabActivated(object? sender, string path)
+        => NavigateToPath(path, pinToTop: true, source: "document-tab");
+
+    private void FollowDocumentWindow(string path)
+    {
+        if (_documentWindow is not { IsVisible: true })
+        {
+            return;
+        }
+
+        if (FileTypeFilter.IsTextPreview(path)
+            || ThumbnailExtensions.Contains(Path.GetExtension(path)))
+        {
+            _documentWindow.FollowPath(path);
+        }
+    }
+
     // The collapse chevron's mirror, shown only while the panel is CLOSED and
     // an image row is selected. Both conditions matter: the edge it sits on is
     // also the tree's scrollbar and, docked, the width grip, so it has to earn
@@ -22563,6 +23192,8 @@ public partial class MainWindow : Window
             }
         }
 
+        SyncWorkAreaReservation();
+
         ApplyViewerSide();
         ViewerPanel.Visibility = Visibility.Visible;
         ViewerSplitThumb.Visibility = Visibility.Visible;
@@ -22598,6 +23229,7 @@ public partial class MainWindow : Window
         StopUiStallWatch();
         ViewerLoadLogFlush("viewer closed");
         SetViewerFullscreen(false);
+        HideDocumentViewer();
 
         // Read while the panel is still up and its column still stands: what
         // the window gives back has to be what the panel was actually holding,
@@ -22655,6 +23287,8 @@ public partial class MainWindow : Window
         {
             Left += panelWidth;
         }
+
+        SyncWorkAreaReservation();
 
         _appliedClip = (ClipUnknown, 0, 0);
         ApplyWindowClipRegion();
@@ -22894,7 +23528,10 @@ public partial class MainWindow : Window
         // The same predicate every other door into the panel asks, so a kind the
         // panel learns to show is a kind this opens for, with nothing to keep in
         // step - see HasViewerPreview for the times that went wrong.
-        if (HasViewerPreview(item.FullPath))
+        // Pictures, films and sound open the panel on their own. Markdown and
+        // code wait for an explicit 보기 / the expand chevron, otherwise
+        // walking a source tree would keep widening the window.
+        if (HasMediaPreview(item.FullPath))
         {
             OpenViewer();
         }
@@ -22998,6 +23635,7 @@ public partial class MainWindow : Window
             ViewerImage.Source = null;
             _viewerShowingDecodedImage = false;
             ViewerIconImage.Source = null;
+            HideDocumentViewer();
             ViewerFileName.Text = string.Empty;
             SetViewerCaption(string.Empty);
             ClearViewerZoom();
@@ -23017,6 +23655,11 @@ public partial class MainWindow : Window
             // picture is left alone (that is what this early return is for -
             // it keeps a playing GIF or film alive through a re-selection),
             // but the counter and the strip have to be told.
+            //
+            // The pop-out window still needs this click: "+" creates an empty
+            // tab that is filled by the next tree selection, which may be the
+            // file already on the panel.
+            FollowDocumentWindow(path);
             UpdateViewerCarousel();
             return;
         }
@@ -23038,6 +23681,25 @@ public partial class MainWindow : Window
         }
 
         ViewerPlayOverlay.Visibility = Visibility.Collapsed;
+
+        FollowDocumentWindow(path);
+
+        if (FileTypeFilter.IsTextPreview(path))
+        {
+            if (_viewerFullscreen)
+            {
+                SetViewerFullscreen(false);
+            }
+
+            ShowDocumentInPanel(path);
+            ViewerFileName.Text = item.Name;
+            ApplyViewerCaptionEmphasis();
+            SetViewerCaption(string.Empty);
+            UpdateViewerNowPlaying();
+            return;
+        }
+
+        HideDocumentViewer();
 
         ViewerFileName.Text = item.Name;
         // A NEW name is a new answer to "am I hearing this one", and this path
@@ -24744,7 +25406,7 @@ public partial class MainWindow : Window
     //
     // The shell answers for a video the same way it does for a PSD, so nothing
     // else had to change to make the thumbnail appear.
-    private static bool HasViewerPreview(string path)
+    private static bool HasMediaPreview(string path)
         => ThumbnailExtensions.Contains(Path.GetExtension(path))
            || VideoExtensions.Contains(Path.GetExtension(path))
            // Sound too, and the shell already draws it: asked for a thumbnail,
@@ -24752,6 +25414,9 @@ public partial class MainWindow : Window
            // picture side of this cost nothing at all. Files with no art fall
            // through to the file-type icon like anything else.
            || AudioExtensions.Contains(Path.GetExtension(path));
+
+    private static bool HasViewerPreview(string path)
+        => HasMediaPreview(path) || FileTypeFilter.IsTextPreview(path);
 
     // The file currently handed to MediaElement - null whenever nothing is
     // loaded, which is also the app's promise that the file is not held open.
@@ -25146,7 +25811,7 @@ public partial class MainWindow : Window
     // file cannot start sending it elsewhere.
     private bool OpenByGestureInViewer(FileSystemItem item)
     {
-        if (!_settings.OpenMediaInViewer || !HasViewerPreview(item.FullPath))
+        if (!_settings.OpenMediaInViewer || !HasMediaPreview(item.FullPath))
         {
             return false;
         }
@@ -28777,6 +29442,11 @@ public partial class MainWindow : Window
         // A window the user had ALREADY maximized is not ours either way: the
         // guard was there before this switch and stays, so full screen fills the
         // screen in that case simply because the window is that big.
+        // Swallow the ABN_FULLSCREENAPP pair that maximizing this window
+        // generates, including any copy still sitting in the queue after we
+        // leave. A real game fullscreen arriving later is not ignored.
+        IgnoreOwnFullscreenAppBarPulse();
+
         if (on)
         {
             if (takeOverWindow && _settings.ViewerFullscreenFillsDesktop &&
@@ -28793,17 +29463,36 @@ public partial class MainWindow : Window
                 }
                 WindowState = WindowState.Maximized;
             }
+
+            // After maximize so IsDockedFullscreen is actually true and the
+            // reservation is dropped; in-window fullscreen keeps it.
+            if (_isDocked)
+            {
+                SyncWorkAreaReservation();
+            }
         }
-        else if (_viewerFullscreenPreviousState is { } previous)
+        else
         {
-            _viewerFullscreenPreviousState = null;
-            WindowState = previous;
+            // Even if Windows never sends fullscreen-off (we were unregistered),
+            // this window is no longer covering the desktop.
+            _fullscreenAppActive = false;
+            if (_viewerFullscreenPreviousState is { } previous)
+            {
+                _viewerFullscreenPreviousState = null;
+                WindowState = previous;
+            }
+
             // _viewerFullscreen is already false above, so the guard in
             // PositionToWorkArea has stood down and this rebuilds the band the
-            // window had before - margin, clip and all four bounds.
+            // window had before - margin, clip and all four bounds - and puts
+            // the work-area reservation back.
             if (_isDocked)
             {
                 PositionToWorkArea();
+            }
+            else
+            {
+                SyncWorkAreaReservation();
             }
         }
 
@@ -29570,7 +30259,7 @@ public partial class MainWindow : Window
     // place to add the next kind.
     private static bool IsViewerCarouselItem(FileSystemItem item)
         => item is { IsDirectory: false, IsPlaceholder: false, IsShowMore: false }
-           && HasViewerPreview(item.FullPath);
+           && HasMediaPreview(item.FullPath);
 
     // The one place the panel's world is decided, which is why the search link
     // needed nothing else: hand it a different source list and the counter, the
@@ -32503,6 +33192,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        IgnoreOwnFullscreenAppBarPulse();
+
         if (item.IsChecked)
         {
             // Same guard as the way in: a window the user maximized themselves is
@@ -32522,6 +33213,11 @@ public partial class MainWindow : Window
                 WindowState = WindowState.Maximized;
             }
 
+            if (_isDocked)
+            {
+                SyncWorkAreaReservation();
+            }
+
             return;
         }
 
@@ -32529,19 +33225,43 @@ public partial class MainWindow : Window
         // full screen started, _viewerFullscreenPreviousState is null and the
         // window stays as the user left it - switching this off cannot shrink a
         // window this mode never grew.
+        _fullscreenAppActive = false;
         if (_viewerFullscreenPreviousState is { } previous)
         {
             _viewerFullscreenPreviousState = null;
             WindowState = previous;
-
-            // 도킹이면 띠를 다시 세운다. IsDockedFullscreen은 방금 거짓이 되었으므로
-            // PositionToWorkArea의 조기 반환은 이미 물러났고, 마진·클립·네 값이
-            // 한 번에 돌아온다. SetViewerFullscreen이 모드를 나갈 때와 같다.
-            if (_isDocked)
-            {
-                PositionToWorkArea();
-            }
         }
+
+        // 도킹이면 띠를 다시 세운다. IsDockedFullscreen은 방금 거짓이 되었으므로
+        // PositionToWorkArea의 조기 반환은 이미 물러났고, 마진·클립·네 값이
+        // 한 번에 돌아온다. SetViewerFullscreen이 모드를 나갈 때와 같다.
+        if (_isDocked)
+        {
+            PositionToWorkArea();
+        }
+        else
+        {
+            SyncWorkAreaReservation();
+        }
+    }
+
+    private void IgnoreOwnFullscreenAppBarPulse()
+    {
+        _ignoreAppBarFullscreenPulse = true;
+        Dispatcher.BeginInvoke(
+            () => _ignoreAppBarFullscreenPulse = false,
+            System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void RestoreWorkAreaReservationAfterForeignFullscreen()
+    {
+        if (!_fullscreenAppActive || IsDockedFullscreen)
+        {
+            return;
+        }
+
+        _fullscreenAppActive = false;
+        SyncWorkAreaReservation();
     }
 
     // 전체화면에 들어간 뒤 사용자가 썸네일 바를 도로 달라고 말했는가.
@@ -32894,10 +33614,13 @@ public partial class MainWindow : Window
     // here follows the switch in the options menu, and a Korean app writing
     // "Sunday, August 16" over its own panel would be the one line that did
     // not.
-    private static System.Globalization.CultureInfo ViewerClockCulture
-        => Strings.IsEnglish
-            ? System.Globalization.CultureInfo.GetCultureInfo("en-US")
-            : System.Globalization.CultureInfo.GetCultureInfo("ko-KR");
+    private System.Globalization.CultureInfo ViewerClockCulture
+        => _settings.Language switch
+        {
+            "en" => System.Globalization.CultureInfo.GetCultureInfo("en-US"),
+            "zh-CN" => System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),
+            _ => System.Globalization.CultureInfo.GetCultureInfo("ko-KR"),
+        };
 
     // NOT gated on the slideshow (2026-08-16, the same day it was first built
     // that way). It draws on whatever the panel is showing, so the only thing
