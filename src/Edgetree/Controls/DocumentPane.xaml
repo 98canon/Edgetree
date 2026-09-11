@@ -7,15 +7,16 @@
              Background="{DynamicResource ViewerBackground}">
     <UserControl.Resources>
         <Style x:Key="DocChip" TargetType="ToggleButton">
-            <Setter Property="Foreground" Value="{DynamicResource ForegroundText}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentForeground}"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ViewerChipBorderBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentForeground}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="Margin" Value="0,0,6,0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="FontSize" Value="{DynamicResource FooterChipFontSize}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -29,7 +30,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBackground}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
                                 <Setter Property="Opacity" Value="1"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -42,14 +43,15 @@
             <Setter Property="Opacity" Value="0.7"/>
         </Style>
         <Style x:Key="DocButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource ForegroundText}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentForeground}"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ViewerChipBorderBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentForeground}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="FontSize" Value="{DynamicResource FooterChipFontSize}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Opacity" Value="0.7"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -65,7 +67,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Opacity" Value="1"/>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBackground}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -101,14 +103,20 @@
                     Foreground="{DynamicResource ForegroundText}"
                     Opacity="0.8"/>
         </DockPanel>
-        <mdxam:MarkdownScrollViewer x:Name="Preview"
+        <Grid x:Name="PreviewHost"
                 Grid.Row="1"
                 Margin="8,0,8,8"
-                ClickAction="OpenBrowser"
-                HorizontalScrollBarVisibility="Disabled"
-                VerticalScrollBarVisibility="Auto"
-                SizeChanged="Preview_SizeChanged"
-                Visibility="Collapsed"/>
+                ClipToBounds="True"
+                SizeChanged="PreviewHost_SizeChanged"
+                Visibility="Collapsed">
+            <mdxam:MarkdownScrollViewer x:Name="Preview"
+                    ClickAction="OpenBrowser"
+                    ClipToBounds="True"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto"/>
+        </Grid>
         <avalonEdit:TextEditor x:Name="Editor"
                 Grid.Row="1"
                 Margin="8,0,8,8"

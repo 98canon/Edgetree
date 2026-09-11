@@ -191,6 +191,11 @@ public class AppSettings
     // it was added from.
     public List<string> NetworkLocations { get; set; } = new();
 
+    // User-defined working folders shown by project mode.
+    public List<ProjectEntry> Projects { get; set; } = new();
+    public bool ProjectMode { get; set; } = false;
+    public string? ActiveProjectPath { get; set; }
+
     // What an UNMODIFIED drag inside the tree means. On, it follows Explorer:
     // a move within the same volume, a copy across volumes, with Shift and Ctrl
     // forcing either one anywhere. Off, a plain drag always copies and Shift is

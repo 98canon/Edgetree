@@ -1,4 +1,4 @@
-﻿<!-- Crispness settings on the Window below, inherited by everything in it.
+<!-- Crispness settings on the Window below, inherited by everything in it.
 
      UseLayoutRounding: without it, layout lands on fractional device pixels, so
      a 1px divider gets spread across two pixels as two grey halves. Subtle at
@@ -4108,7 +4108,7 @@
                                     Value="True">
                                 <Setter TargetName="Bd"
                                         Property="Background"
-                                        Value="{DynamicResource TreeRowHoverBackground}"/>
+                                        Value="{DynamicResource ActiveControlHoverBackground}"/>
                                 <Setter Property="Opacity"
                                         Value="1"/>
                             </Trigger>
@@ -5542,56 +5542,43 @@
                             RenderTransformOrigin="0.5,0.5"
                             RenderTransform="{StaticResource HeaderGlyphGrow}"/>
                 </Button>
-                <!-- The image viewer toggle - opens/closes the preview panel
-                     beside the tree (see OpenViewer/CloseViewer). On the same
-                     hand-built 16-unit box as the magnifier.
-                     A PICTURE, not the eye it started as: an eye is the
-                     general "preview" sign, and it promised the panel could
-                     show the contents of any file (2026-08-09) - which
-                     it can't; anything that isn't an image gets its shell
-                     icon. The tooltip already said 이미지 뷰어 and that was
-                     not enough, which is the usual result of leaving the
-                     correction to a tooltip. -->
-                <Button x:Name="ViewerButton"
+                <!-- Project mode toggle. The viewer remains available from file
+                     double-click/context actions; this header slot now switches
+                     between the complete tree and the selected project tree. -->
+                <Button x:Name="ProjectButton"
                         Grid.Column="4"
                         Style="{StaticResource ToggleButtonStyle}"
-                        Click="ViewerButton_Click"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="0"
+                        Click="ProjectButton_Click"
                         Margin="{DynamicResource HeaderButtonMargin}"
                         RenderTransform="{StaticResource ShiftUp1px}"
-                        ToolTip="{x:Static services:Strings.ToolTipViewer}"
+                        ToolTip="项目"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                    <!-- Material Symbols "image" (Resources/Icons/image_16dp_
-                         E3E3E3_FILL0_wght400_GRAD0_opsz24.svg), chosen after
-                         the hand-drawn one stood out against its neighbours.
-                         The weight was settled by eye against the arithmetic
-                         and the arithmetic won: this app's glyphs are 1.4 in a
-                         16 box = 8.8%, 400/24 works out at about 8.3%, and it
-                         is the one that sits right. 500/20 read heavy; 300/24
-                         was tried after it and read worse the other way
-                         ("이건 더 이상하네요"), so 400 it is. Smaller opsz
-                         thickens the stroke at the same weight, which is why
-                         both axes have to be picked together - 24 throughout.
-                         The dp in the filename is irrelevant: every download
-                         gives the same 960-box path.
-                         STRETCH="UNIFORM" IS WHAT MAKES IT VISIBLE: Material's
-                         paths live in a 960 box with NEGATIVE y, and a Path
-                         defaults to Stretch="None" - the geometry is then drawn
-                         at those literal coordinates, entirely outside the
-                         element's own box, and clipped away to nothing. Uniform
-                         normalises it into the Width/Height below instead,
-                         which is also why no Viewbox is needed.
-                         13, not 16: Stretch fits the path's BOUNDS, dropping
-                         the padding the 960 box builds in, and the neighbouring
-                         hand-drawn glyphs sit inset by about that much. -->
-                    <Path Data="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z M0-960H960M0 0H960"
-                            Fill="{DynamicResource ForegroundText}"
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="ProjectContextMenu"
+                                Opened="ProjectContextMenu_Opened">
+                            <MenuItem Header="添加项目"
+                                    Click="AddProjectMenuItem_Click"/>
+                            <Separator/>
+                            <MenuItem x:Name="ProjectMenuItems"
+                                    Header="项目列表"
+                                    IsEnabled="False"/>
+                            <Separator/>
+                            <MenuItem Header="全部文件"
+                                    Click="AllFilesTreeMenuItem_Click"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                    <!-- Material Symbols folder. -->
+                    <Path Data="M120-160q-33 0-56.5-23.5T40-240v-480q0-33 23.5-56.5T120-800h280l80 80h360q33 0 56.5 23.5T920-640v400q0 33-23.5 56.5T840-160H120Zm0-80h720v-400H367l-80-80H120v480Zm0 0v-480 480Z M0-960H960M0 0H960"
+                            Fill="{DynamicResource AccentForeground}"
                             Stretch="Uniform"
                             Width="{DynamicResource HeaderGlyphBox}"
                             Height="{DynamicResource HeaderGlyphBox}"
                             RenderTransformOrigin="0.5,0.5"
                             RenderTransform="{StaticResource HeaderGlyphGrow}"/>
-                </Button>
-                <Button x:Name="CollapseAllButton"
+                </Button>                <Button x:Name="CollapseAllButton"
                         Grid.Column="5"
                         Style="{StaticResource ToggleButtonStyle}"
                         Click="CollapseAllButton_Click"
@@ -7261,7 +7248,7 @@
                     Grid.Row="1"
                     Grid.RowSpan="5"
                     Grid.Column="2"
-                    Visibility="Collapsed"
+                    Visibility="Visible"
                     Padding="0,2,0,0"
                     Background="{DynamicResource ViewerBackground}"
                     BorderBrush="{DynamicResource PanelDividerBrush}"
@@ -9131,7 +9118,9 @@
                             Grid.Row="0"
                             Grid.RowSpan="3"
                             Panel.ZIndex="4"
-                            Visibility="Collapsed"
+                            Visibility="Visible"
+                            Opacity="0"
+                            IsHitTestVisible="False"
                             PopOutRequested="DocumentPane_PopOutRequested"/>
                     <StackPanel x:Name="ViewerCaptionPanel"
                             Grid.Row="1"
@@ -10045,6 +10034,7 @@
                     VerticalAlignment="Center"
                     Panel.ZIndex="3"
                     Visibility="Collapsed"
+                    Background="Transparent"
                     Style="{StaticResource ViewerCollapseButtonStyle}"
                     Click="ViewerCollapseButton_Click"
                     ToolTip="{x:Static services:Strings.ViewerClose}">
@@ -10075,7 +10065,7 @@
                      two directions cannot drift apart. -->
                 <Path x:Name="ViewerCollapseGlyph"
                         Data="M576-240 336-480l240-240 51 51-189 189 189 189-51 51Z"
-                        Fill="{DynamicResource ForegroundText}"
+                        Fill="{DynamicResource AccentForeground}"
                         Stretch="Uniform"
                         Width="{DynamicResource ViewerChipIconSize}"
                         Height="{DynamicResource ViewerChipIconSize}"
@@ -10104,7 +10094,7 @@
                     VerticalAlignment="Center"
                     Panel.ZIndex="3"
                     Visibility="Collapsed"
-                    Background="{DynamicResource SidebarBackground}"
+                    Background="Transparent"
                     Style="{StaticResource ViewerCollapseButtonStyle}"
                     Click="ViewerExpandButton_Click"
                     ToolTip="{x:Static services:Strings.ToolTipViewer}">
@@ -10113,7 +10103,7 @@
                      for why these two skip the 960 box. -->
                 <Path x:Name="ViewerExpandGlyph"
                         Data="M522-480 333-669l51-51 240 240-240 240-51-51 189-189Z"
-                        Fill="{DynamicResource ForegroundText}"
+                        Fill="{DynamicResource AccentForeground}"
                         Stretch="Uniform"
                         Width="{DynamicResource ViewerChipIconSize}"
                         Height="{DynamicResource ViewerChipIconSize}"

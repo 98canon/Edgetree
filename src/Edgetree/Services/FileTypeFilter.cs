@@ -278,5 +278,23 @@ public static class FileTypeFilter
     }
 
     public static bool IsTextPreview(string path)
-        => IsMarkdown(path) || IsCode(path);
+    {
+        if (IsMarkdown(path) || IsCode(path))
+        {
+            return true;
+        }
+
+        string extension = Path.GetExtension(path).TrimStart('.');
+        return extension.Equals("txt", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("text", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("log", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("nfo", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("readme", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("rst", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("adoc", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("asciidoc", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("tex", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("latex", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals("bib", StringComparison.OrdinalIgnoreCase);
+    }
 }

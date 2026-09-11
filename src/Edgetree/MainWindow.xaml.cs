@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.Win32;
@@ -114,6 +114,10 @@ public partial class MainWindow : Window
     // rebound - hiding a drive root removes it here and the view follows. It
     // was a plain List while the set of roots only ever changed at startup.
     private readonly System.Collections.ObjectModel.ObservableCollection<FileSystemItem> _roots = new();
+    private readonly System.Collections.ObjectModel.ObservableCollection<ProjectEntry> _projects = new();
+
+    private ProjectEntry? ActiveProject => _projects.FirstOrDefault(p =>
+        string.Equals(p.Path, _settings.ActiveProjectPath, StringComparison.OrdinalIgnoreCase));
     private bool _isDocked = true;
     private readonly AppBarService _appBar = new();
     private bool _appBarUpdating;
@@ -727,6 +731,31 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object? sender, RoutedEventArgs e)
     {
         _settings = _settingsService.Load();
+        _projects.Clear();
+        foreach (var project in _settings.Projects)
+        {
+            if (string.IsNullOrWhiteSpace(project.Path))
+            {
+                continue;
+            }
+
+            project.Path = Path.GetFullPath(project.Path.Trim());
+            if (string.IsNullOrWhiteSpace(project.Name))
+            {
+                project.Name = ProjectDisplayName(project.Path);
+            }
+
+            if (!_projects.Any(p => string.Equals(p.Path, project.Path, StringComparison.OrdinalIgnoreCase)))
+            {
+                _projects.Add(project);
+            }
+        }
+        _settings.Projects = _projects.ToList();
+        if (_settings.ProjectMode && (ActiveProject is null || !Directory.Exists(ActiveProject.Path)))
+        {
+            _settings.ProjectMode = false;
+            _settings.ActiveProjectPath = null;
+        }
         _preferredMonitorDeviceName = _settingsService.EffectiveMonitorDeviceName;
         _usePreferredMonitorForInitialDock = !string.IsNullOrWhiteSpace(_preferredMonitorDeviceName);
         // 저장에서 들어온 자막 크기를 1080 기준으로 한 번만 옮긴다. 설정을 읽은
@@ -903,6 +932,7 @@ public partial class MainWindow : Window
             new System.Windows.Data.CollectionContainer { Collection = _roots },
             new System.Windows.Data.CollectionContainer { Collection = _bottomGapRows },
         };
+        ApplyProjectButtonState();
         StartDriveWatchers();
         StartMemoryWatch();
         FileSystemService.LateChildrenArrived += OnLateChildrenArrived;
@@ -5122,7 +5152,7 @@ public partial class MainWindow : Window
         UpdateAutoHideHandleOverlay(collapsed: visibility != Visibility.Visible);
         ExplorerTree.Visibility = visibility;
         SearchButton.Visibility = visibility;
-        ViewerButton.Visibility = visibility;
+        ProjectButton.Visibility = visibility;
         CollapseAllButton.Visibility = visibility;
         OptionsButton.Visibility = visibility;
         CloseButton.Visibility = visibility;
@@ -17779,6 +17809,10 @@ public partial class MainWindow : Window
     // with how many folders someone has expanded.
     private void StartDriveWatchers()
     {
+        if (_settings.ProjectMode)
+        {
+            return;
+        }
         foreach (var root in _roots)
         {
             // Already watched - this runs again whenever the set of roots
@@ -19563,9 +19597,16 @@ public partial class MainWindow : Window
     private void ReloadRoots()
     {
         _roots.Clear();
-        foreach (var root in FileSystemService.GetDriveRoots())
+        if (_settings.ProjectMode && ActiveProject is { } project)
         {
-            _roots.Add(root);
+            _roots.Add(new FileSystemItem(ProjectDisplayName(project.Path), project.Path, isDirectory: true));
+        }
+        else
+        {
+            foreach (var root in FileSystemService.GetDriveRoots())
+            {
+                _roots.Add(root);
+            }
         }
 
         // A drive that was hidden had no watcher (they are made per ROOT), so
@@ -23025,16 +23066,174 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ViewerButton_Click(object sender, RoutedEventArgs e)
+    private void ProjectButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_viewerOpen)
+        if (_settings.ProjectMode)
         {
-            CloseViewer();
+            SetProjectMode(false);
+            return;
         }
-        else
+
+        if (ActiveProject is null)
         {
-            OpenViewer();
+            AddProject();
+            return;
         }
+
+        SetProjectMode(true);
+    }
+
+    private void ProjectContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        ProjectMenuItems.Items.Clear();
+        ProjectMenuItems.IsEnabled = _projects.Count > 0;
+        ProjectMenuItems.Header = _projects.Count == 0 ? "项目列表（空）" : "项目列表";
+
+        foreach (var project in _projects)
+        {
+            var item = new MenuItem
+            {
+                Header = project.Name,
+                IsCheckable = true,
+                IsChecked = string.Equals(project.Path, _settings.ActiveProjectPath, StringComparison.OrdinalIgnoreCase),
+                ToolTip = project.Path,
+                Tag = project,
+            };
+            item.Click += ProjectMenuItem_Click;
+
+            var projectMenu = new ContextMenu();
+            var rename = new MenuItem { Header = "重命名" };
+            rename.Click += (_, _) => RenameProject(project);
+            var remove = new MenuItem { Header = "移除项目" };
+            remove.Click += (_, _) => RemoveProject(project);
+            var open = new MenuItem { Header = "打开所在文件夹" };
+            open.Click += (_, _) => OpenProjectFolder(project.Path);
+            projectMenu.Items.Add(rename);
+            projectMenu.Items.Add(remove);
+            projectMenu.Items.Add(new Separator());
+            projectMenu.Items.Add(open);
+            item.ContextMenu = projectMenu;
+            ProjectMenuItems.Items.Add(item);
+        }
+    }
+
+    private void ProjectMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: ProjectEntry project })
+        {
+            return;
+        }
+
+        _settings.ActiveProjectPath = project.Path;
+        SetProjectMode(true);
+    }
+
+    private void AddProjectMenuItem_Click(object sender, RoutedEventArgs e) => AddProject();
+
+    private void AllFilesTreeMenuItem_Click(object sender, RoutedEventArgs e) => SetProjectMode(false);
+
+    private void AddProject()
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "选择项目文件夹",
+            UseDescriptionForTitle = true,
+        };
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        {
+            return;
+        }
+
+        string path = Path.GetFullPath(dialog.SelectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var existing = _projects.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+        {
+            existing = new ProjectEntry { Name = ProjectDisplayName(path), Path = path };
+            _projects.Add(existing);
+        }
+
+        _settings.Projects = _projects.ToList();
+        _settings.ActiveProjectPath = existing.Path;
+        _settings.ProjectMode = true;
+        _settingsService.Save(_settings);
+        SetProjectMode(true);
+    }
+
+    private void SetProjectMode(bool enabled)
+    {
+        if (enabled && ActiveProject is null)
+        {
+            enabled = false;
+        }
+
+        _settings.ProjectMode = enabled;
+        _settingsService.Save(_settings);
+        ReloadRoots();
+        ApplyProjectButtonState();
+    }
+
+    private void ApplyProjectButtonState()
+    {
+        ProjectButton.ToolTip = _settings.ProjectMode && ActiveProject is not null
+            ? $"项目：{ActiveProject.Name}（点击返回全部文件）"
+            : "项目（点击切换项目树）";
+    }
+
+    private void RenameProject(ProjectEntry project)
+    {
+        ProjectContextMenu.IsOpen = false;
+        var window = new PresetNameWindow(project.Name, project.Name, "项目名称", "请输入项目名称") { Owner = this };
+        if (window.ShowDialog() != true || string.IsNullOrWhiteSpace(window.Result))
+        {
+            return;
+        }
+
+        project.Name = window.Result!.Trim();
+        _settings.Projects = _projects.ToList();
+        _settingsService.Save(_settings);
+    }
+
+    private static void OpenProjectFolder(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"\"{path}\"",
+            UseShellExecute = true,
+        });
+    }
+
+    private void RemoveProject(ProjectEntry project)
+    {
+        ProjectContextMenu.IsOpen = false;
+        if (MessageBox.Show(this, $"要移除项目“{project.Name}”吗？\n\n不会删除磁盘文件。",
+                "移除项目", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        bool active = ReferenceEquals(ActiveProject, project);
+        _projects.Remove(project);
+        _settings.Projects = _projects.ToList();
+        if (active)
+        {
+            _settings.ActiveProjectPath = _projects.FirstOrDefault()?.Path;
+            _settings.ProjectMode = _settings.ActiveProjectPath is not null;
+        }
+        _settingsService.Save(_settings);
+        ReloadRoots();
+        ApplyProjectButtonState();
+    }
+
+    private static string ProjectDisplayName(string path)
+    {
+        string trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return Path.GetFileName(trimmed) is { Length: > 0 } name ? name : trimmed;
     }
 
     // The panel's one close control, on the divider where the hand already is
@@ -23050,14 +23249,18 @@ public partial class MainWindow : Window
     {
         _viewerShowingDecodedImage = false;
         DocumentPane.ShowPopOut = true;
-        DocumentPane.Visibility = Visibility.Visible;
         DocumentPane.Load(path);
+        DocumentPane.Visibility = Visibility.Visible;
+        DocumentPane.Opacity = 1;
+        DocumentPane.IsHitTestVisible = true;
     }
 
     private void HideDocumentViewer()
     {
         DocumentPane.Unload();
-        DocumentPane.Visibility = Visibility.Collapsed;
+        DocumentPane.Opacity = 0;
+        DocumentPane.IsHitTestVisible = false;
+        DocumentPane.Visibility = Visibility.Visible;
     }
 
     private void DocumentPane_PopOutRequested(object? sender, EventArgs e)
@@ -23252,7 +23455,10 @@ public partial class MainWindow : Window
 
         // Back to the closed shape: tree star, both panel columns 0.
         SetViewerColumns(null);
-        ViewerPanel.Visibility = Visibility.Collapsed;
+        // Keep the viewer visual tree mounted while its columns are zero.
+        // Recreating this subtree on every close/open caused a visible flash
+        // during docking and when the first document/image was loaded.
+        ViewerPanel.Visibility = Visibility.Visible;
         ViewerSplitThumb.Visibility = Visibility.Collapsed;
         ViewerCollapseButton.Visibility = Visibility.Collapsed;
         UpdateViewerExpandButton();
@@ -25811,7 +26017,13 @@ public partial class MainWindow : Window
     // file cannot start sending it elsewhere.
     private bool OpenByGestureInViewer(FileSystemItem item)
     {
-        if (!_settings.OpenMediaInViewer || !HasMediaPreview(item.FullPath))
+        // Text that the app can render belongs to the side document pane on a
+        // gesture, regardless of the media preference. This prevents a normal
+        // double-click on .md/.json/.txt from launching Cursor or another shell
+        // association. The preference still controls image/audio/video gestures.
+        bool textPreview = FileTypeFilter.IsTextPreview(item.FullPath);
+        bool mediaPreview = _settings.OpenMediaInViewer && HasMediaPreview(item.FullPath);
+        if (!textPreview && !mediaPreview)
         {
             return false;
         }
@@ -37384,4 +37596,3 @@ public partial class MainWindow : Window
         RunSearchFilter();
     }
 }
-

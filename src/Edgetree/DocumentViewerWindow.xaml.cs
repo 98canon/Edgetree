@@ -48,6 +48,9 @@ public partial class DocumentViewerWindow : Window
             "PanelDividerBrush",
             "ViewerChipBorderBrush",
             "FooterChipFontSize",
+            "ActiveControlBackground",
+            "ActiveControlHoverBackground",
+            "ActiveControlBorderBrush",
         })
         {
             var value = host.TryFindResource(key);
@@ -315,6 +318,10 @@ public partial class DocumentViewerWindow : Window
 
     private void ImageHost_LostMouseCapture(object sender, MouseEventArgs e)
         => _panning = false;
+
+
+    private void CloseWindowButton_Click(object sender, RoutedEventArgs e)
+        => Close();
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {

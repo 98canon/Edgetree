@@ -5,10 +5,10 @@
         xmlns:services="clr-namespace:SidebarExplorer.App.Services"
         Title="Edgetree"
         Icon="pack://application:,,,/Resources/app.ico"
-        Width="1100"
-        Height="760"
-        MinWidth="480"
-        MinHeight="320"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowState="Maximized"
+        ShowInTaskbar="True"
         Background="{DynamicResource ViewerBackground}"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Grid>
@@ -21,6 +21,21 @@
                 BorderThickness="0,0,0,1"
                 Padding="6,4">
             <DockPanel>
+                <Button x:Name="CloseWindowButton"
+                        DockPanel.Dock="Right"
+                        Content="×"
+                        Width="28"
+                        Height="24"
+                        Margin="6,0,0,0"
+                        Cursor="Hand"
+                        Focusable="False"
+                        ToolTip="关闭"
+                        Click="CloseWindowButton_Click"
+                        Background="Transparent"
+                        Foreground="{DynamicResource AccentForeground}"
+                        FontWeight="Bold"
+                        BorderBrush="{DynamicResource AccentForeground}"
+                        BorderThickness="1"/>
                 <Button x:Name="AddTabButton"
                         DockPanel.Dock="Right"
                         Content="+"

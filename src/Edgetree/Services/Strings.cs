@@ -556,7 +556,7 @@ public static class Strings
     public static string ViewerFullscreen = "전체화면";
     public static string DocumentPreview = "미리보기";
     public static string DocumentEdit = "편집";
-    public static string DocumentPopOut = "새 창에서 보기";
+    public static string DocumentPopOut = "전체 화면 보기";
     public static string DocumentTooLarge = "파일이 너무 커서 여기서 열 수 없습니다. 기본 프로그램에서 여세요.";
     public static string DocumentLoadFailed = "파일을 열 수 없습니다.";
     public static string DocumentSaveFailed = "저장하지 못했습니다.";
@@ -1229,7 +1229,7 @@ public static class Strings
         ViewerFullscreen = "全屏";
         DocumentPreview = "预览";
         DocumentEdit = "编辑";
-        DocumentPopOut = "弹出查看";
+        DocumentPopOut = "全屏查看";
         DocumentTooLarge = "文件太大，无法在这里打开。请用默认程序打开。";
         DocumentLoadFailed = "无法打开此文件。";
         DocumentSaveFailed = "未能保存。";
@@ -1648,7 +1648,7 @@ public static class Strings
         ViewerFullscreen = "Full screen";
         DocumentPreview = "Preview";
         DocumentEdit = "Edit";
-        DocumentPopOut = "Open in new window";
+        DocumentPopOut = "Full-screen view";
         DocumentTooLarge = "This file is too large to open here. Use the default app.";
         DocumentLoadFailed = "Could not open this file.";
         DocumentSaveFailed = "Could not save.";

@@ -1,4 +1,4 @@
-﻿; Edgetree installer (Inno Setup 6).
+; Edgetree installer (Inno Setup 6).
 ;
 ; Payload is the SELF-CONTAINED MULTI-FILE publish (publish\folder) - no .NET runtime needed
 ; on the target PC, and no single-file bundle. The bundle is why a clean PC shows this app at
@@ -106,6 +106,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; The whole multi-file publish. pdb is a debug symbol file - kept out of the shipped build.
 Source: "..\publish\folder\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\LICENSE.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE-98CANON.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\CONTRIBUTORS.md"; DestDir: "{app}"; Flags: ignoreversion
 

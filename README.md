@@ -1,21 +1,34 @@
 # Edgetree 中文社区版 v2.7.0
 
-> **非官方简体中文社区分支，由 [98canon](https://github.com/98canon) 维护。**
+> **非官方简体中文社区 Fork，由 [98canon](https://github.com/98canon) 维护。**
 > 本版本基于上游 [Edgetree v2.6.0](https://github.com/legendsteel11/Edgetree)，不是原作者发布的官方版本。
 >
+> **重要授权说明：本 Fork 中由 `98canon` 新增的代码、文档、界面功能和修复仅限非商业使用。允许学习、修改和 Fork，但再发布时必须保留 `98canon` 署名、本 Fork 说明以及 [LICENSE-98CANON.md](LICENSE-98CANON.md)。**
+> 上游代码和第三方组件不受上述新增内容限制，仍按各自原许可证授权。详细署名见 [CONTRIBUTORS.md](CONTRIBUTORS.md)，许可证见 [LICENSE.md](LICENSE.md)、[LICENSE-98CANON.md](LICENSE-98CANON.md) 和 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+>
 > **本分支的主要改动：**
-> - 新增简体中文界面和帮助内容；
-> - 新增 Markdown 和代码文件预览、编辑、自动保存、标签页和独立窗口；
-> - 新增可自定义快捷键；
-> - 新增 Windows 工作区预留（AppBar），让最大化窗口避开侧边栏；
+> - **新增项目管理和项目树切换：只显示用户添加的项目目录树，可通过顶部项目图标切换。**
+> - **新增 Markdown、代码、JSON、文本和配置文件的侧边预览与编辑。**
+> - **新增文档、图片和媒体侧边查看，以及无边框全屏查看。**
+> - **双击可预览文档只在侧边栏打开，不自动启动 Cursor 等外部编辑器。**
+> - **Markdown 长代码块自动换行，避免预览内容横向溢出。**
+> - **新增文档标签页、自动保存和文件变化更新。**
+> - **新增简体中文界面和帮助内容。**
+> - **新增可自定义快捷键。**
+> - **新增 Windows 工作区预留（AppBar），让最大化窗口避开侧边栏。**
 > - 改进多实例、多显示器、文件类型筛选和自动停靠；
 > - 保留上游 v2.6.0 的图片 1:1 像素对齐和剪贴板稳定性修复。
->
-> 原项目、原作者和第三方组件的版权信息均保留。详细署名见 [CONTRIBUTORS.md](CONTRIBUTORS.md)，许可证见 [LICENSE.md](LICENSE.md) 和 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
 [上游项目](https://github.com/legendsteel11/Edgetree) · [问题反馈](https://github.com/98canon/Edgetree/issues) · [下载最新版本](https://github.com/98canon/Edgetree/releases/latest)
 
 Edgetree 是一个轻量的 Windows 文件浏览工具，可以像 VS Code 的 Explorer 一样停靠在屏幕左侧或右侧。它不是要替代 Windows 资源管理器，而是让你随时查看文件夹结构，并快速跳转到文件。
+
+## 工具定位
+
+> **本工具是为不支持在侧边栏直接编辑或预览本地文件的 Agent 工具开发的辅助小工具，例如 Codex、Grok Build 等。**
+> 它提供项目目录管理、文件树浏览、文档侧边预览和编辑能力，方便 Agent 工作流中查看和修改本地项目文件。
+>
+> **这里仅说明工具的使用场景，不代表本项目与 Codex、Grok Build 或其他 Agent 工具存在官方合作、隶属或背书关系。**
 
 ## 下载
 
@@ -40,6 +53,8 @@ Edgetree 是一个轻量的 Windows 文件浏览工具，可以像 VS Code 的 E
 - 支持多显示器、不同 DPI 和任务栏自动隐藏场景。
 
 ### 文件树
+
+**项目管理和项目树切换：可添加多个项目目录，通过顶部项目图标在当前项目目录树和全部文件树之间切换；项目模式下只显示已添加项目的目录树。**
 
 - 从“此电脑”开始显示所有磁盘；
 - 文件夹按需加载，重新启动后可以恢复上次展开的位置；
@@ -78,14 +93,15 @@ Edgetree 是一个轻量的 Windows 文件浏览工具，可以像 VS Code 的 E
 
 本分支新增文档工具：
 
-- Markdown 文件默认以渲染后的预览打开；
-- Markdown 可以切换到编辑模式；
-- 代码文件使用带语法高亮的编辑器打开；
-- 编辑内容会自动保存到原文件；
-- 单个文件超过 2 MB 时不会在内置编辑器中打开，会提示使用系统默认程序；
-- 支持在预览面板中弹出独立窗口；
-- 独立窗口支持多个标签页，也可以打开图片；
-- 文件被其他程序修改时，预览会在没有未保存编辑内容的情况下更新。
+- **Markdown 文件默认以渲染后的预览打开，并可切换到编辑模式；**
+- **代码、JSON、文本和配置文件支持在侧边栏中预览或编辑；**
+- **Markdown 长代码块自动换行，避免长 JSON、长 URL 和连续英文内容横向溢出；**
+- **双击可预览文档只在侧边栏打开，不自动弹出 Cursor 等外部编辑器；**
+- **支持文档、图片和媒体在侧边查看，并可使用无边框全屏查看窗口；**
+- **文档查看窗口支持多个标签页，也可以打开图片；**
+- **编辑内容会自动保存到原文件；**
+- **文件被其他程序修改时，预览会在没有未保存编辑内容的情况下更新；**
+- 单个文件超过 2 MB 时不会在内置编辑器中打开，会提示使用系统默认程序。
 
 > 编辑器会直接写回原文件。修改重要文件前，请先确认文件路径并做好备份。
 
@@ -148,9 +164,16 @@ F2、Delete、Ctrl+C 等资源管理器常用按键不会被快捷键设置覆�
 
     ISCC.exe installer/Edgetree.iss
 
-安装器脚本会从待打包的 EXE 读取版本号，避免安装器版本和程序版本不一致。安装器会同时携带 LICENSE.md、THIRD-PARTY-NOTICES.md 和 CONTRIBUTORS.md。
+安装器脚本会从待打包的 EXE 读取版本号，避免安装器版本和程序版本不一致。安装器会同时携带 LICENSE.md、LICENSE-98CANON.md、THIRD-PARTY-NOTICES.md 和 CONTRIBUTORS.md。
 
 ## v2.7.0 变更记录（2026-09-10）
+
+### 2026-09-11 补充说明
+
+- **新增 `LICENSE-98CANON.md`，明确 `98canon` 新增内容仅限非商业使用。**
+- **允许对 98canon 新增内容进行学习、修改和 Fork，但必须保留 `98canon` 署名、本 Fork 说明和独立许可证文件。**
+- **增加面向 Codex、Grok Build 等不支持侧边编辑文件的 Agent 工具的辅助工具定位说明。**
+- **明确上游 Edgetree 代码和第三方组件继续按各自原许可证执行。**
 
 - 新增简体中文界面和帮助内容；
 - 新增 Markdown、代码文件预览和编辑；
@@ -186,6 +209,11 @@ F2、Delete、Ctrl+C 等资源管理器常用按键不会被快捷键设置覆�
 
 ### 本 Fork
 
+- 本 Fork 新增内容使用 [LICENSE-98CANON.md](LICENSE-98CANON.md)；
+- **`98canon` 新增内容仅限非商业使用，允许学习、修改和 Fork；**
+- **Fork 和再发布时必须保留 `98canon` 署名、本 Fork 说明以及 `LICENSE-98CANON.md`；**
+- 上游 Edgetree 代码继续使用 MIT License；
+- 第三方组件继续使用各自原许可证；
 - 维护者和贡献者：[98canon](https://github.com/98canon)；
 - 贡献内容：简体中文本地化、帮助内容、文档预览/编辑、快捷键、工作区预留，以及多实例、多显示器、文件筛选和自动停靠相关改进；
 - 本 Fork 是非官方社区分支，与上游作者没有隶属或背书关系；
@@ -197,5 +225,6 @@ F2、Delete、Ctrl+C 等资源管理器常用按键不会被快捷键设置覆�
 
 - [贡献者与署名](CONTRIBUTORS.md)
 - [MIT License](LICENSE.md)
+- [98CANON 新增内容非商业许可证](LICENSE-98CANON.md)
 - [第三方许可证](THIRD-PARTY-NOTICES.md)
 - [韩文说明](README-ko.md)
